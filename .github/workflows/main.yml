@@ -1,35 +1,30 @@
-name: Build LiteMatchManager Plugin
+name: Build LiteMatchManager
 
-on:
-  push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch: 
+on: [push, pull_request]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    # 【關鍵更新】要求 GitHub 準備 .NET 10 的編譯環境
-    - name: Setup .NET 10.0
+    # 強制安裝 .NET 10 (包含預覽版)，保證環境絕對建立成功
+    - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '10.0.x'
+        dotnet-version: 10.0.x
+        dotnet-quality: 'preview'
 
     - name: Restore dependencies
       run: dotnet restore
 
-    - name: Build Plugin
+    - name: Build
       run: dotnet build --configuration Release --no-restore
 
-    - name: Upload DLL Artifact
+    # 使用萬用字元 *.dll 抓取外掛，打包提供下載
+    - name: Upload DLL
       uses: actions/upload-artifact@v4
       with:
-        name: LiteMatchManager-Release
-        # 路徑也要跟著更新為 net10.0
-        path: bin/Release/net10.0/LiteMatchManager.dll
+        name: LiteMatchManager-Binary
+        path: bin/Release/net10.0/*.dll

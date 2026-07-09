@@ -22,17 +22,18 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("ChatPrefix")] public string ChatPrefix { get; set; } = "[ {Green}比賽系統{White} ]";
     [JsonPropertyName("EnableChatWeaponCommands")] public bool EnableChatWeaponCommands { get; set; } = true;
     
+    // 【.NET 10 現代化語法：集合運算式】使用中括號 [] 讓代碼更簡潔
     [JsonPropertyName("SpawnWeapons")] 
-    public List<string> SpawnWeapons { get; set; } = new List<string> { "weapon_knife", "item_assaultsuit", "weapon_deagle", "weapon_awp" };
+    public List<string> SpawnWeapons { get; set; } = ["weapon_knife", "item_assaultsuit", "weapon_deagle", "weapon_awp"];
     
     [JsonPropertyName("WarmupConfigName")] public string WarmupConfigName { get; set; } = "warmup.cfg";
     [JsonPropertyName("LiveConfigName")] public string LiveConfigName { get; set; } = "live.cfg";
     [JsonPropertyName("Duel_MapChangeDelay")] public int MapChangeDelay { get; set; } = 5;
     
+    // 【.NET 10 現代化語法：集合運算式】
     [JsonPropertyName("MapList")] 
-    public List<string> MapList { get; set; } = new List<string> { "Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343" };
+    public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
 }
-
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";

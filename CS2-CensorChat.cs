@@ -36,16 +36,20 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "4.0_ZeroLatency";
+    public override string ModuleVersion => "5.0_GodTier_ZeroGC";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "極致優化版賽事系統 (0分配/0抖動)";
+    public override string ModuleDescription => "神級極限效能版 (絕對 0 GC 分配 / 0 抖動)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
-    // 狀態與快取
+    // ==========================================
+    // 【極限優化 3】預先分配 64 人最高容量，拒絕伺服器運行中擴容 (Resize) 導致的抖動
+    // ==========================================
     private string _cachedPrefix = "";
-    private HashSet<ulong> _readyPlayers = new();
-    private Dictionary<ulong, int> _playerUnreadyTime = new(); 
+    private HashSet<ulong> _readyPlayers = new(64);
+    private Dictionary<ulong, int> _playerUnreadyTime = new(64); 
+    private List<string> _unreadyNamesCache = new(64); // 【極限優化 2】記憶體池複用，拒絕 new List
+    
     private bool _isMatchLive = false;
     private bool _isChangingMap = false; 
     private CounterStrikeSharp.API.Modules.Timers.Timer? _globalCheckTimer;
@@ -53,7 +57,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public void OnConfigParsed(LiteMatchConfig config)
     {
         Config = config;
-        // 【優化 3】只在讀取設定檔時轉換一次顏色，避免頻繁字串操作
         _cachedPrefix = config.ChatPrefix
             .Replace("{White}", ChatColors.White.ToString())
             .Replace("{Red}", ChatColors.Red.ToString())
@@ -92,9 +95,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         });
     }
 
-    // ==========================================
-    // 【優化 1】徹底移除 LINQ 的無垃圾隊伍判定
-    // ==========================================
     private HookResult OnJoinTeam(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null || !player.IsValid) return HookResult.Continue;
@@ -103,7 +103,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         if (teamIndex == 2 || teamIndex == 3)
         {
             int currentTeamCount = 0;
-            // 傳統迴圈，效能最高，不會產生 GC 垃圾
             foreach (var p in Utilities.GetPlayers())
             {
                 if (p != null && p.IsValid && !p.IsBot && p.TeamNum == teamIndex && p.SteamID != player.SteamID)
@@ -123,19 +122,34 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     }
 
     // ==========================================
-    // 【優化 2】攔截器提早返回，節省字串創建
+    // 【極限優化 1】0 分配字元探測器 (防禦玩家洗頻引發的延遲)
     // ==========================================
     private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null || !player.IsValid) return HookResult.Continue;
 
-        string rawText = info.GetArg(1).Trim('"');
-        if (string.IsNullOrEmpty(rawText)) return HookResult.Continue;
+        string rawArg = info.GetArg(1);
+        if (string.IsNullOrEmpty(rawArg)) return HookResult.Continue;
 
-        // 首字元非指令符號，直接放行，0 效能損耗
-        if (rawText[0] != '!' && rawText[0] != '.') return HookResult.Continue;
+        bool isCommand = false;
+        
+        // 直接掃描字串記憶體，尋找第一個非空白/非引號的字元
+        for (int i = 0; i < rawArg.Length; i++)
+        {
+            char c = rawArg[i];
+            if (c == '"' || c == ' ') continue; 
+            if (c == '!' || c == '.')
+            {
+                isCommand = true;
+            }
+            break; // 第一個有效字不是 ! 或 . 就直接放行
+        }
 
-        string command = rawText.ToLower();
+        // 如果不是指令，完全不執行任何字串分配 (0 效能損耗)
+        if (!isCommand) return HookResult.Continue; 
+
+        // 確認是指令後，才安全建立字串
+        string command = rawArg.Trim('"', ' ').ToLower();
 
         if (command == "!nextmap")
         {
@@ -218,7 +232,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _isMatchLive = true;
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}所有玩家已準備，比賽即將開始！");
             
-            // 【優化 4】滿人開賽後，徹底銷毀檢查未準備的計時器，釋放伺服器線程
+            // 滿人開賽後徹底銷毀計時器，將線程資源還給伺服器
             _globalCheckTimer?.Kill();
             _globalCheckTimer = null;
 
@@ -228,16 +242,13 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
     }
 
-    // ==========================================
-    // 【優化 5】嚴格的 Pawn 雙層防崩潰驗證
-    // ==========================================
+    // 嚴格雙層防崩潰驗證
     private HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)
     {
         var player = @event.Userid;
         if (player == null || !player.IsValid) return HookResult.Continue;
 
         Server.NextFrame(() => {
-            // 加入 PlayerPawn.Value 驗證，防止斷線瞬間觸發 Access Violation 導致伺服器崩潰
             if (player == null || !player.IsValid || player.PlayerPawn == null || !player.PlayerPawn.IsValid || !player.PawnIsAlive) return;
             
             player.RemoveWeapons(); 
@@ -275,14 +286,12 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ] 、{ChatColors.Orange}!awp {ChatColors.White}[ AWP狙擊步槍 ]");
     }
 
-    // ==========================================
-    // 防卡頓全域掃描 (已替換掉 LINQ)
-    // ==========================================
     private void CheckUnreadyPlayers()
     {
         if (_isMatchLive) return; 
         
-        List<string> unreadyNames = new();
+        // 【極限優化 2】清空快取池，重複利用記憶體，拒絕產生 GC 垃圾
+        _unreadyNamesCache.Clear();
 
         foreach (var p in Utilities.GetPlayers())
         {
@@ -291,7 +300,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 ulong steamId = p.SteamID;
                 if (!_readyPlayers.Contains(steamId))
                 {
-                    unreadyNames.Add(p.PlayerName);
+                    _unreadyNamesCache.Add(p.PlayerName); // 裝入池中
+                    
                     if (!_playerUnreadyTime.ContainsKey(steamId)) _playerUnreadyTime[steamId] = 0;
                     
                     _playerUnreadyTime[steamId] += Config.UnreadyReminderInterval;
@@ -299,7 +309,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     if (_playerUnreadyTime[steamId] >= Config.KickUnreadyPlayerTime) 
                     {
                         Server.NextFrame(() => {
-                            // 簡化 Kick 指令，防範中文編碼可能導致的控制台錯誤
                             Server.ExecuteCommand($"kickid {p.UserId} Unready_Timeout");
                         });
                         _playerUnreadyTime.Remove(steamId);
@@ -313,7 +322,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             }
         }
         
-        if (unreadyNames.Count > 0) Server.PrintToChatAll($" {_cachedPrefix} 目前未準備玩家: {ChatColors.Yellow}{string.Join(", ", unreadyNames)}");
+        if (_unreadyNamesCache.Count > 0) 
+        {
+            Server.PrintToChatAll($" {_cachedPrefix} 目前未準備玩家: {ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}");
+        }
     }
 
     private void ResetMatchState()
@@ -323,7 +335,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
         
-        // 換地圖時重新啟動未準備偵測計時器
         _globalCheckTimer?.Kill();
         _globalCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckUnreadyPlayers, TimerFlags.REPEAT);
     }

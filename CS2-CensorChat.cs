@@ -15,15 +15,48 @@ namespace LiteMatchManager;
 #pragma warning disable CS8618
 
 // ==========================================
-// 1. 定義 JSON 設定檔結構 (自動生成)
+// 1. JSON 設定檔結構 (所有你未來想改的東西都在這)
 // ==========================================
 public class LiteMatchConfig : BasePluginConfig
 {
+    [JsonPropertyName("MinPlayersToStart")]
+    public int MinPlayersToStart { get; set; } = 4;           // 預設 2V2 開賽人數
+
+    [JsonPropertyName("MaxPlayersPerTeam")]
+    public int MaxPlayersPerTeam { get; set; } = 2;           // 單邊隊伍人數上限
+
+    [JsonPropertyName("KickUnreadyPlayerTime")]
+    public int KickUnreadyPlayerTime { get; set; } = 360;     // 幾秒未準備要踢出 (預設 6 分鐘)
+
+    [JsonPropertyName("UnreadyReminderInterval")]
+    public int UnreadyReminderInterval { get; set; } = 60;    // 每幾秒提示一次未準備警告
+
+    [JsonPropertyName("ChatPrefix")]
+    public string ChatPrefix { get; set; } = "[ {Green}比賽系統{White} ]"; // 系統提示前綴文字
+
+    [JsonPropertyName("EnableChatWeaponCommands")]
+    public bool EnableChatWeaponCommands { get; set; } = true; // 是否允許玩家使用 !dg, !awp 拿槍
+
+    [JsonPropertyName("SpawnWeapons")]
+    public List<string> SpawnWeapons { get; set; } = new List<string> // 玩家重生預設給予的武器清單
+    {
+        "weapon_knife",
+        "item_assaultsuit",
+        "weapon_deagle",
+        "weapon_awp"
+    };
+
+    [JsonPropertyName("WarmupConfigName")]
+    public string WarmupConfigName { get; set; } = "warmup.cfg"; // 暖場設定檔名稱
+
+    [JsonPropertyName("LiveConfigName")]
+    public string LiveConfigName { get; set; } = "live.cfg";     // 開賽設定檔名稱
+
     [JsonPropertyName("Duel_MapChangeDelay")]
-    public int MapChangeDelay { get; set; } = 5;
+    public int MapChangeDelay { get; set; } = 5;              // 換圖倒數秒數
 
     [JsonPropertyName("MapList")]
-    public List<string> MapList { get; set; } = new List<string>
+    public List<string> MapList { get; set; } = new List<string> // 換圖清單
     {
         "Aim_redline_vieforit:3290337428",
         "aimpro_vieforit:3290753343",
@@ -32,40 +65,36 @@ public class LiteMatchConfig : BasePluginConfig
     };
 }
 
-// 繼承 IPluginConfig 來啟用設定檔功能
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "2.2_Optimized";
+    public override string ModuleVersion => "3.0_UltimateConfig";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "輕量化準備系統與自動換圖設定檔";
+    public override string ModuleDescription => "輕量化賽事系統 (全動態設定檔支援)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
-    // 當外掛讀取 JSON 設定檔時觸發
     public void OnConfigParsed(LiteMatchConfig config)
     {
         Config = config;
     }
 
     // ==========================================
-    // 參數設定區塊
+    // 狀態追蹤參數
     // ==========================================
-    private const int MinPlayersToStart = 10;       
-    private const int KickTimeSeconds = 360;        
-    private const int ReminderInterval = 60;        
-    private string Prefix = $" [{ChatColors.Green}比賽系統{ChatColors.White}]";
+    // 動態解析設定檔中的前綴顏色
+    private string Prefix => ReplaceColorTags(Config.ChatPrefix);
 
     private HashSet<ulong> _readyPlayers = new();
     private Dictionary<ulong, int> _playerUnreadyTime = new(); 
     private bool _isMatchLive = false;
-    private bool _isChangingMap = false; // 防止重複觸發換圖
-    private CounterStrikeSharp.API.Modules.Timers.Timer? _globalCheckTimer;
+    private bool _isChangingMap = false; 
 
     public override void Load(bool hotReload)
     {
         AddCommandListener("say", OnPlayerSay);
         AddCommandListener("say_team", OnPlayerSay);
+        AddCommandListener("jointeam", OnJoinTeam);
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
         
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
@@ -84,10 +113,51 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         RegisterListener<Listeners.OnMapStart>(mapName => 
         {
             ResetMatchState();
-            Server.ExecuteCommand("exec warmup.cfg");
+            // 讀取設定檔中定義的暖場 cfg (預設 warmup.cfg)
+            Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
         });
 
-        _globalCheckTimer = AddTimer(ReminderInterval, CheckUnreadyPlayers, TimerFlags.REPEAT);
+        // 使用設定檔中的廣播秒數啟動全域計時器
+        AddTimer(Config.UnreadyReminderInterval, CheckUnreadyPlayers, TimerFlags.REPEAT);
+    }
+
+    // ==========================================
+    // 顏色標籤轉換器
+    // ==========================================
+    private string ReplaceColorTags(string input)
+    {
+        return input
+            .Replace("{White}", ChatColors.White.ToString())
+            .Replace("{Red}", ChatColors.Red.ToString())
+            .Replace("{Green}", ChatColors.Green.ToString())
+            .Replace("{Lime}", ChatColors.Lime.ToString())
+            .Replace("{LightBlue}", ChatColors.LightBlue.ToString())
+            .Replace("{Yellow}", ChatColors.Yellow.ToString())
+            .Replace("{Gold}", ChatColors.Gold.ToString())
+            .Replace("{Orange}", ChatColors.Orange.ToString());
+    }
+
+    // ==========================================
+    // 攔截加入隊伍 (人數限制)
+    // ==========================================
+    private HookResult OnJoinTeam(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player == null || !player.IsValid) return HookResult.Continue;
+        if (!int.TryParse(info.GetArg(1), out int teamIndex)) return HookResult.Continue;
+
+        if (teamIndex == 2 || teamIndex == 3)
+        {
+            int currentTeamCount = Utilities.GetPlayers().Count(p => 
+                p != null && p.IsValid && !p.IsBot && p.TeamNum == teamIndex && p.SteamID != player.SteamID);
+            
+            if (currentTeamCount >= Config.MaxPlayersPerTeam)
+            {
+                string teamName = teamIndex == 2 ? "恐怖份子 (T)" : "反恐小組 (CT)";
+                player.PrintToChat($" {Prefix} {ChatColors.Red}加入失敗！{teamName} 已經滿員 (最多 {Config.MaxPlayersPerTeam} 人)。");
+                return HookResult.Handled; 
+            }
+        }
+        return HookResult.Continue;
     }
 
     // ==========================================
@@ -99,17 +169,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         string text = info.GetArg(1).Trim('"').Trim().ToLower();
 
-        // [新增] 管理員強制換圖指令 !nextmap
         if (text == "!nextmap")
         {
-            if (AdminManager.PlayerHasPermissions(player, "@css/root"))
-            {
-                TriggerMapChange();
-            }
-            else
-            {
-                player.PrintToChat($" {Prefix} {ChatColors.Red}你沒有權限執行此指令。");
-            }
+            if (AdminManager.PlayerHasPermissions(player, "@css/root")) TriggerMapChange();
+            else player.PrintToChat($" {Prefix} {ChatColors.Red}你沒有權限執行此指令。");
             return HookResult.Handled;
         }
 
@@ -124,49 +187,41 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             return HookResult.Handled;
         }
 
-        if (HandleWeaponCommand(player, text)) return HookResult.Handled; 
+        // 只有在設定檔允許的情況下，才攔截武器指令
+        if (Config.EnableChatWeaponCommands && HandleWeaponCommand(player, text)) 
+        {
+            return HookResult.Handled; 
+        }
 
         return HookResult.Continue;
     }
 
     // ==========================================
-    // [核心新增] 解析工作坊並執行換圖邏輯
+    // 換圖邏輯
     // ==========================================
     private void TriggerMapChange()
     {
         if (_isChangingMap || Config.MapList == null || Config.MapList.Count == 0) return;
-
         _isChangingMap = true;
 
-        // 隨機挑選清單中的一張圖
         var random = new Random();
         string selectedMapString = Config.MapList[random.Next(Config.MapList.Count)];
         
-        // 解析寫法："地圖名稱:工作坊ID"
         string[] parts = selectedMapString.Split(':');
         string mapName = parts[0];
         string workshopId = parts.Length > 1 ? parts[1] : "";
 
-        // 完美還原你指定的顏色廣播格式
         Server.PrintToChatAll($" {ChatColors.Gold}正在切換地圖 {ChatColors.Lime}{mapName}{ChatColors.Gold}，{ChatColors.Orange}{Config.MapChangeDelay} 秒後 {ChatColors.Gold}開始下一場決鬥");
 
-        // 使用 AddTimer 倒數，完全不吃效能
         AddTimer(Config.MapChangeDelay, () =>
         {
-            // 如果有工作坊 ID，使用專屬讀圖指令，否則使用一般 map 指令
-            if (!string.IsNullOrEmpty(workshopId))
-            {
-                Server.ExecuteCommand($"host_workshop_map {workshopId}");
-            }
-            else
-            {
-                Server.ExecuteCommand($"map {mapName}");
-            }
+            if (!string.IsNullOrEmpty(workshopId)) Server.ExecuteCommand($"host_workshop_map {workshopId}");
+            else Server.ExecuteCommand($"map {mapName}");
         });
     }
 
     // ==========================================
-    // 玩家準備邏輯 (與上方相同)
+    // 玩家準備邏輯
     // ==========================================
     private void HandlePlayerReady(CCSPlayerController player)
     {
@@ -179,7 +234,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         _readyPlayers.Add(steamId);
         _playerUnreadyTime.Remove(steamId); 
-        Server.PrintToChatAll($" {Prefix} {ChatColors.Green}{player.PlayerName}{ChatColors.White} 已準備！ 目前進度: {ChatColors.Green}{_readyPlayers.Count} / {MinPlayersToStart}");
+        Server.PrintToChatAll($" {Prefix} {ChatColors.Green}{player.PlayerName}{ChatColors.White} 已準備！ 目前進度: {ChatColors.Green}{_readyPlayers.Count} / {Config.MinPlayersToStart}");
         CheckMatchStart();
     }
 
@@ -190,25 +245,26 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             _readyPlayers.Remove(steamId);
             _playerUnreadyTime[steamId] = 0; 
-            Server.PrintToChatAll($" {Prefix} {ChatColors.Red}{player.PlayerName}{ChatColors.White} 取消了準備！ 目前進度: {ChatColors.Red}{_readyPlayers.Count} / {MinPlayersToStart}");
+            Server.PrintToChatAll($" {Prefix} {ChatColors.Red}{player.PlayerName}{ChatColors.White} 取消了準備！ 目前進度: {ChatColors.Red}{_readyPlayers.Count} / {Config.MinPlayersToStart}");
         }
     }
 
     private void CheckMatchStart()
     {
         if (_isMatchLive) return;
-        if (_readyPlayers.Count >= MinPlayersToStart)
+        if (_readyPlayers.Count >= Config.MinPlayersToStart)
         {
             _isMatchLive = true;
             Server.PrintToChatAll($" {Prefix} {ChatColors.Green}所有玩家已準備，比賽即將開始！");
             AddTimer(3.0f, () => {
-                Server.ExecuteCommand("exec live.cfg");
+                // 讀取設定檔中定義的開賽 cfg (預設 live.cfg)
+                Server.ExecuteCommand($"exec {Config.LiveConfigName}");
             });
         }
     }
 
     // ==========================================
-    // 重生配裝系統
+    // 迴圈給予重生裝備 (完全對應 JSON 清單)
     // ==========================================
     private HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)
     {
@@ -217,11 +273,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         Server.NextFrame(() => {
             if (player == null || !player.IsValid || !player.PawnIsAlive) return;
-            player.RemoveWeapons(); 
-            player.GiveNamedItem("weapon_knife");        
-            player.GiveNamedItem("item_assaultsuit");    
-            player.GiveNamedItem("weapon_deagle");       
-            player.GiveNamedItem("weapon_awp");          
+            
+            player.RemoveWeapons(); // 沒收預設裝備
+            
+            // 根據 JSON 中的清單，迴圈給予裝備
+            foreach (var item in Config.SpawnWeapons)
+            {
+                player.GiveNamedItem(item);
+            }
         });
         return HookResult.Continue;
     }
@@ -270,18 +329,18 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             {
                 unreadyNames.Add(p.PlayerName);
                 if (!_playerUnreadyTime.ContainsKey(steamId)) _playerUnreadyTime[steamId] = 0;
-                _playerUnreadyTime[steamId] += ReminderInterval;
+                _playerUnreadyTime[steamId] += Config.UnreadyReminderInterval; // 動態抓取設定檔的廣播秒數
 
-                if (_playerUnreadyTime[steamId] >= KickTimeSeconds) 
+                if (_playerUnreadyTime[steamId] >= Config.KickUnreadyPlayerTime) // 動態抓取設定檔的踢出秒數
                 {
                     Server.NextFrame(() => {
-                        Server.ExecuteCommand($"kickid {p.UserId} 你超過 6 分鐘未準備，已被系統自動踢出");
+                        Server.ExecuteCommand($"kickid {p.UserId} 你超過 {Config.KickUnreadyPlayerTime / 60} 分鐘未準備，已被系統自動踢出");
                     });
                     _playerUnreadyTime.Remove(steamId);
                 }
                 else
                 {
-                    int timeLeft = KickTimeSeconds - _playerUnreadyTime[steamId];
+                    int timeLeft = Config.KickUnreadyPlayerTime - _playerUnreadyTime[steamId];
                     p.PrintToChat($" {Prefix} {ChatColors.Red}[警告] {ChatColors.White}你尚未準備，請輸入 {ChatColors.Green}!R{ChatColors.White}。再過 {ChatColors.Red}{timeLeft}{ChatColors.White} 秒未準備將被踢出！");
                 }
             }

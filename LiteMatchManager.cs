@@ -40,9 +40,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "6.4_GodTier_Flawless";
+    public override string ModuleVersion => "6.6_GodTier_Flawless";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "神級極限效能版 (新增 40 回合制開賽提示)";
+    public override string ModuleDescription => "神級極限效能版 (優化廣播訊息排版)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -327,7 +327,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _isMatchLive = true;
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}所 有 玩 家 已 準 備，比 賽 開 始");
             
-            // 【新增】在這裡加上你專屬的 40 回合制提示訊息
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}３０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
             
             _privateCheckTimer?.Kill();
@@ -433,7 +432,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             
             if (_unreadyNamesCache.Count > 0) 
             {
-                Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}");
+                // 【已修改】照你的要求把未準備名單放前面，門檻提示放後面
+                Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{Config.MinPlayersToStart}{ChatColors.Default} 人");
             }
         }
         catch (Exception) { }

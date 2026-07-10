@@ -19,7 +19,13 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("MinPlayersToStart")] public int MinPlayersToStart { get; set; } = 4;
     [JsonPropertyName("MaxPlayersPerTeam")] public int MaxPlayersPerTeam { get; set; } = 2;
     [JsonPropertyName("KickUnreadyPlayerTime")] public int KickUnreadyPlayerTime { get; set; } = 360;
+    
+    // 【修改】私訊警告與計算踢人的間隔 (預設 60 秒)
     [JsonPropertyName("UnreadyReminderInterval")] public int UnreadyReminderInterval { get; set; } = 60;
+    
+    // 【新增】全頻廣播「尚未準備玩家名單」的間隔 (預設 15 秒)
+    [JsonPropertyName("PublicUnreadyReminderInterval")] public int PublicUnreadyReminderInterval { get; set; } = 15;
+
     [JsonPropertyName("ChatPrefix")] public string ChatPrefix { get; set; } = "[ {Green}2 v 2 對 戰 模 式{White} ]";
     [JsonPropertyName("EnableChatWeaponCommands")] public bool EnableChatWeaponCommands { get; set; } = true;
     
@@ -37,9 +43,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "5.8_GodTier_SpectatorFix";
+    public override string ModuleVersion => "6.0_GodTier_DualTimer";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "神級極限效能版 (精準觀戰判定 + 防中離重置 + 嚴格賽制)";
+    public override string ModuleDescription => "神級極限效能版 (雙獨立計時器 + 獨立廣播秒數)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -50,7 +56,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     
     private bool _isMatchLive = false;
     private bool _isChangingMap = false; 
-    private CounterStrikeSharp.API.Modules.Timers.Timer? _globalCheckTimer;
+    
+    // 【新增】雙獨立計時器，效能極限分離
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
 
     public void OnConfigParsed(LiteMatchConfig config)
     {
@@ -86,20 +95,16 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             return HookResult.Continue;
         });
 
-        // ==========================================
-        // 【修改】精準判定：僅針對跳觀戰的玩家處理
-        // ==========================================
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
             var player = @event.Userid;
             if (player != null && player.IsValid)
             {
                 ulong steamId = player.SteamID;
-                int newTeam = @event.Team; // 取得玩家想加入的新隊伍 (0=無, 1=觀戰, 2=T, 3=CT)
+                int newTeam = @event.Team; 
                 
                 if (!_isMatchLive)
                 {
-                    // 只有當他跳去觀戰席 (1) 或未分配 (0) 時，才拔除準備狀態
                     if (newTeam == 0 || newTeam == 1)
                     {
                         if (_readyPlayers.Contains(steamId))
@@ -107,14 +112,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                             _readyPlayers.Remove(steamId);
                             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳去觀戰，已強制取消他的準備");
                         }
-                        // 拔除他的未準備秒數，下次跳回 CT/T 時重新從 0 秒計算
                         _playerUnreadyTime.Remove(steamId); 
                     }
-                    // 如果是在 T 跟 CT 之間互換 (2或3)，則什麼都不做，保留他的準備狀態！
                 }
                 else
                 {
-                    // 若是 LIVE 狀態中途換隊或跳觀戰，立刻檢查是否剩單邊 0 人
                     CheckAndResetGameImmediate();
                 }
             }
@@ -232,17 +234,17 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         if (command == "!r" || command == "!ready")
         {
             if (!_isMatchLive) HandlePlayerReady(player);
-            return HookResult.Handled; 
+            return HookResult.Continue; 
         }
         else if (command == "!unready")
         {
             if (!_isMatchLive) HandlePlayerUnready(player);
-            return HookResult.Handled;
+            return HookResult.Continue; 
         }
 
         if (Config.EnableChatWeaponCommands && HandleWeaponCommand(player, command)) 
         {
-            return HookResult.Handled; 
+            return HookResult.Continue; 
         }
 
         return HookResult.Continue;
@@ -316,8 +318,13 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             _isMatchLive = true;
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}所有玩家已準備，比賽開始！");
-            _globalCheckTimer?.Kill();
-            _globalCheckTimer = null;
+            
+            // 【修改】比賽開始時，殺死兩個獨立計時器
+            _privateCheckTimer?.Kill();
+            _privateCheckTimer = null;
+            _publicBroadcastTimer?.Kill();
+            _publicBroadcastTimer = null;
+            
             Server.ExecuteCommand($"exec {Config.LiveConfigName}");
         }
     }
@@ -358,11 +365,12 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ] 、{ChatColors.Orange}!awp {ChatColors.White}[ AWP狙擊步槍 ]");
     }
 
-    private void CheckUnreadyPlayers()
+    // ==========================================
+    // 【新增拆分】邏輯 1：私下警告與踢出倒數 (60秒執行一次)
+    // ==========================================
+    private void CheckAndWarnUnreadyPlayers()
     {
         if (_isMatchLive) return; 
-        
-        _unreadyNamesCache.Clear();
 
         foreach (var p in Utilities.GetPlayers())
         {
@@ -371,7 +379,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 ulong steamId = p.SteamID;
                 if (!_readyPlayers.Contains(steamId))
                 {
-                    _unreadyNamesCache.Add(p.PlayerName); 
                     if (!_playerUnreadyTime.ContainsKey(steamId)) _playerUnreadyTime[steamId] = 0;
                     _playerUnreadyTime[steamId] += Config.UnreadyReminderInterval;
 
@@ -387,8 +394,29 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     else
                     {
                         int timeLeft = Config.KickUnreadyPlayerTime - _playerUnreadyTime[steamId];
-                        p.PrintToChat($" {_cachedPrefix} 你尚未準備，請輸入 {ChatColors.Lime}!R{ChatColors.White}，{ChatColors.Lime}{timeLeft} {ChatColors.Lime}秒未準備將被踢出");
+                        p.PrintToChat($" {_cachedPrefix} 你尚未準備，請輸入 {ChatColors.Lime}!R{ChatColors.White}，{ChatColors.Red}{timeLeft}{ChatColors.White} 秒未準備將被踢出");
                     }
+                }
+            }
+        }
+    }
+
+    // ==========================================
+    // 【新增拆分】邏輯 2：全頻公開處刑名單廣播 (15秒執行一次)
+    // ==========================================
+    private void BroadcastUnreadyPlayers()
+    {
+        if (_isMatchLive) return; 
+        
+        _unreadyNamesCache.Clear();
+
+        foreach (var p in Utilities.GetPlayers())
+        {
+            if (p != null && p.IsValid && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
+            {
+                if (!_readyPlayers.Contains(p.SteamID))
+                {
+                    _unreadyNamesCache.Add(p.PlayerName); 
                 }
             }
         }
@@ -405,8 +433,13 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _isChangingMap = false;
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
-        _globalCheckTimer?.Kill();
-        _globalCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckUnreadyPlayers, TimerFlags.REPEAT);
+        
+        // 【修改】啟動雙獨立引擎
+        _privateCheckTimer?.Kill();
+        _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);
+        
+        _publicBroadcastTimer?.Kill();
+        _publicBroadcastTimer = AddTimer(Config.PublicUnreadyReminderInterval, BroadcastUnreadyPlayers, TimerFlags.REPEAT);
     }
 
     private HookResult OnMatchEnd(EventCsWinPanelMatch @event, GameEventInfo info)

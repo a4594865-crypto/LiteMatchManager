@@ -328,7 +328,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}所 有 玩 家 已 準 備，比 賽 開 始");
             
             // 【新增】在這裡加上你專屬的 40 回合制提示訊息
-            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採{ChatColors.Default} {ChatColors.Green}４０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
+            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採贏{ChatColors.Default} {ChatColors.Green}３０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
             
             _privateCheckTimer?.Kill();
             _privateCheckTimer = null;

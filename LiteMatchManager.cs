@@ -40,9 +40,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "6.2_GodTier_Final";
+    public override string ModuleVersion => "6.3_GodTier_Flawless";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "神級極限效能版 (修正斷線幽靈殘留 + 絕對防崩潰裝甲)";
+    public override string ModuleDescription => "神級極限效能版 (無瑕疵：防賽後秒退錯亂 + 絕對防崩潰裝甲)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -81,8 +81,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
             var player = @event.Userid;
-            // 【極限修正】斷線瞬間實體可能已標記為無效(IsValid=false)。
-            // 放寬條件，只要 player 物件還在，就強行抓取 SteamID 拔除狀態！
             if (player != null)
             {
                 try 
@@ -96,7 +94,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         if (_isMatchLive) CheckAndResetGameImmediate();
                     }
                 } 
-                catch (Exception) { /* 吞掉斷線極限瞬間可能產生的抓取錯誤，不影響伺服器 */ }
+                catch (Exception) { }
             }
             return HookResult.Continue;
         });
@@ -104,7 +102,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
             var player = @event.Userid;
-            // 換隊時玩家是存活的，維持最嚴格的裝甲防護
             if (player != null && player.IsValid && player.Handle != IntPtr.Zero)
             {
                 ulong steamId = player.SteamID;
@@ -143,7 +140,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private void CheckAndResetGameImmediate()
     {
         Server.NextFrame(() => {
-            if (!_isMatchLive) return;
+            // 【終極修復】如果已經在結算換圖倒數中 (_isChangingMap)，就算有人秒退也不要觸發中離警告！
+            if (!_isMatchLive || _isChangingMap) return; 
+            
             try 
             {
                 int activeT = 0;
@@ -470,7 +469,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         int loserScore = Math.Min(scoreT, scoreCT);
         string scoreString = $"{winnerScore} : {loserScore}";
 
-        Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Lime}{winnerName} {ChatColors.Gold}以 {ChatColors.Green}({scoreString}) {ChatColors.Gold}的分數贏過了 {ChatColors.Lime}{loserName}");
+        Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Lime}{winnerName} {ChatColors.Gold}以 {ChatColors.Green}({scoreString}) {ChatColors.Gold}的分數贏過 {ChatColors.Lime}{loserName}");
 
         TriggerMapChange(true);
         return HookResult.Continue;

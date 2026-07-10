@@ -40,9 +40,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "6.6_GodTier_Flawless";
+    public override string ModuleVersion => "6.8_GodTier_Flawless";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "神級極限效能版 (優化廣播訊息排版)";
+    public override string ModuleDescription => "移除秒數延遲，改用 NextFrame 極速執行";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -77,6 +77,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         AddCommandListener("say_team", OnPlayerSay);
         AddCommandListener("jointeam", OnJoinTeam);
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
+        
+        AddCommandListener("drop", (player, info) => {
+            return HookResult.Handled;
+        });
         
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
@@ -133,7 +137,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         RegisterListener<Listeners.OnMapStart>(mapName => 
         {
             ResetMatchState();
-            Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
+            // 【修改】移除秒數延遲，改用 NextFrame 確保極速且安全地執行指令
+            Server.NextFrame(() => {
+                Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
+            });
         });
     }
 
@@ -183,7 +190,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
         
         ResetMatchState();
-        Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
+        Server.NextFrame(() => {
+            Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
+        });
     }
 
     private HookResult OnJoinTeam(CCSPlayerController? player, CommandInfo info)
@@ -334,7 +343,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _publicBroadcastTimer?.Kill();
             _publicBroadcastTimer = null;
             
-            Server.ExecuteCommand($"exec {Config.LiveConfigName}");
+            Server.NextFrame(() => {
+                Server.ExecuteCommand($"exec {Config.LiveConfigName}");
+            });
         }
     }
 
@@ -432,7 +443,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             
             if (_unreadyNamesCache.Count > 0) 
             {
-                // 【已修改】照你的要求把未準備名單放前面，門檻提示放後面
                 Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{Config.MinPlayersToStart}{ChatColors.Default} 人");
             }
         }

@@ -40,9 +40,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "6.3_GodTier_Flawless";
+    public override string ModuleVersion => "6.4_GodTier_Flawless";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "神級極限效能版 (無瑕疵：防賽後秒退錯亂 + 絕對防崩潰裝甲)";
+    public override string ModuleDescription => "神級極限效能版 (新增 40 回合制開賽提示)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -140,7 +140,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private void CheckAndResetGameImmediate()
     {
         Server.NextFrame(() => {
-            // 【終極修復】如果已經在結算換圖倒數中 (_isChangingMap)，就算有人秒退也不要觸發中離警告！
             if (!_isMatchLive || _isChangingMap) return; 
             
             try 
@@ -327,6 +326,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             _isMatchLive = true;
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}所 有 玩 家 已 準 備，比 賽 開 始");
+            
+            // 【新增】在這裡加上你專屬的 40 回合制提示訊息
+            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採{ChatColors.Default} {ChatColors.Green}４０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
             
             _privateCheckTimer?.Kill();
             _privateCheckTimer = null;

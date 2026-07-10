@@ -104,7 +104,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     _readyPlayers.Remove(steamId);
                     _playerUnreadyTime[steamId] = 0; // 重置踢人倒數
                     
-                    Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Red}{player.PlayerName}{ChatColors.White} 變更了隊伍，系統已強制取消他的準備狀態！");
+                    Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳去觀戰，已強制取消他的準備");
                 }
             }
             return HookResult.Continue;

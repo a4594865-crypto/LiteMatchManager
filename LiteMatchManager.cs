@@ -19,7 +19,7 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("MaxPlayersPerTeam")] public int MaxPlayersPerTeam { get; set; } = 2;
     [JsonPropertyName("KickUnreadyPlayerTime")] public int KickUnreadyPlayerTime { get; set; } = 360;
     [JsonPropertyName("UnreadyReminderInterval")] public int UnreadyReminderInterval { get; set; } = 60;
-    [JsonPropertyName("ChatPrefix")] public string ChatPrefix { get; set; } = "[ {Green}比賽系統{White} ]";
+    [JsonPropertyName("ChatPrefix")] public string ChatPrefix { get; set; } = "[ {Green}2 v 2 對 戰 模 式{White} ]";
     [JsonPropertyName("EnableChatWeaponCommands")] public bool EnableChatWeaponCommands { get; set; } = true;
     
     [JsonPropertyName("SpawnWeapons")] 

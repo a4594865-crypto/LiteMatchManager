@@ -137,12 +137,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         RegisterListener<Listeners.OnMapStart>(mapName => 
         {
             ResetMatchState();
-            // 【修改】移除秒數延遲，改用 NextFrame 確保極速且安全地執行指令
+            
+            // 【新增】在後台控制台印出專業級 Log
+            Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
+            
             Server.NextFrame(() => {
                 Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
             });
         });
-    }
 
     private void CheckAndResetGameImmediate()
     {
@@ -190,11 +192,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
         
         ResetMatchState();
+        
+        // 【新增】在控制台留下專業紀錄，讓你確認對戰終止後的動作
+        Console.WriteLine($"[LiteMatch] [AbortMatch] 對戰已終止！正在切換回暖身設定檔：{Config.WarmupConfigName}");
+        
         Server.NextFrame(() => {
             Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
         });
     }
-
     private HookResult OnJoinTeam(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null || !player.IsValid) return HookResult.Continue;
@@ -335,13 +340,15 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             _isMatchLive = true;
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}所 有 玩 家 已 準 備，比 賽 開 始");
-            
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}３０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
             
             _privateCheckTimer?.Kill();
             _privateCheckTimer = null;
             _publicBroadcastTimer?.Kill();
             _publicBroadcastTimer = null;
+            
+            // 【新增】在後台控制台印出專業級 Log
+            Console.WriteLine($"[LiteMatch] [MatchLive] 雙方準備就緒！正式執行開賽設定檔：{Config.LiveConfigName}");
             
             Server.NextFrame(() => {
                 Server.ExecuteCommand($"exec {Config.LiveConfigName}");

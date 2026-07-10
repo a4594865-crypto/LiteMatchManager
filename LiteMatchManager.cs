@@ -145,7 +145,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
             });
         });
-
+}
     private void CheckAndResetGameImmediate()
     {
         Server.NextFrame(() => {

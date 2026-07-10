@@ -93,7 +93,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 {
                     _readyPlayers.Remove(steamId);
                     _playerUnreadyTime[steamId] = 0;
-                    Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳去觀戰或更換隊伍，已強制取消他的準備");
+                    Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳去觀戰或更換隊伍 ，已強制取消他的準備");
                 }
             }
             return HookResult.Continue;
@@ -232,7 +232,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             _readyPlayers.Remove(steamId);
             _playerUnreadyTime[steamId] = 0; 
-            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Red}{player.PlayerName}{ChatColors.White} 取消了準備！ 準備進度：{ChatColors.Red}{_readyPlayers.Count}{ChatColors.Green} / {Config.MinPlayersToStart}");
+            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Red}{player.PlayerName}{ChatColors.White} 取消了準備！準備進度：{ChatColors.Red}{_readyPlayers.Count}{ChatColors.Green} / {Config.MinPlayersToStart}");
         }
     }
 
@@ -242,7 +242,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         if (_readyPlayers.Count >= Config.MinPlayersToStart)
         {
             _isMatchLive = true;
-            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}所有玩家已準備，比賽開始！");
+            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}所有玩家已準備 ，比賽開始！");
             _globalCheckTimer?.Kill();
             _globalCheckTimer = null;
             Server.ExecuteCommand($"exec {Config.LiveConfigName}");
@@ -315,7 +315,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     else
                     {
                         int timeLeft = Config.KickUnreadyPlayerTime - _playerUnreadyTime[steamId];
-                        p.PrintToChat($" {_cachedPrefix} 你尚未準備，請輸入 {ChatColors.Lime}!R{ChatColors.White}，{ChatColors.Red}{timeLeft}{ChatColors.White} 秒未準備將被踢出");
+                        p.PrintToChat($" {_cachedPrefix} 你尚未準備，請輸入 {ChatColors.Lime}!R{ChatColors.White} ，{ChatColors.Lime}{timeLeft}{ChatColors.White} 秒未準備將被踢出");
                     }
                 }
             }

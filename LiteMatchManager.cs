@@ -140,7 +140,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             if (currentTeamCount >= Config.MaxPlayersPerTeam)
             {
                 string teamName = teamIndex == 2 ? "恐怖份子 (T)" : "反恐小組 (CT)";
-                player.PrintToChat($" {_cachedPrefix} {ChatColors.Red}加入失敗！{teamName} 已經滿員 (最多 {Config.MaxPlayersPerTeam} 人)。");
+                player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}加入失敗！{teamName} 已經滿員 (最多 {Config.MaxPlayersPerTeam} 人)。");
                 return HookResult.Handled; 
             }
         }

@@ -20,10 +20,7 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("MaxPlayersPerTeam")] public int MaxPlayersPerTeam { get; set; } = 2;
     [JsonPropertyName("KickUnreadyPlayerTime")] public int KickUnreadyPlayerTime { get; set; } = 360;
     
-    // 【修改】私訊警告與計算踢人的間隔 (預設 60 秒)
     [JsonPropertyName("UnreadyReminderInterval")] public int UnreadyReminderInterval { get; set; } = 60;
-    
-    // 【新增】全頻廣播「尚未準備玩家名單」的間隔 (預設 15 秒)
     [JsonPropertyName("PublicUnreadyReminderInterval")] public int PublicUnreadyReminderInterval { get; set; } = 15;
 
     [JsonPropertyName("ChatPrefix")] public string ChatPrefix { get; set; } = "[ {Green}2 v 2 對 戰 模 式{White} ]";
@@ -43,9 +40,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "6.0_GodTier_DualTimer";
+    public override string ModuleVersion => "6.1_GodTier_ArmoredTimer";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "神級極限效能版 (雙獨立計時器 + 獨立廣播秒數)";
+    public override string ModuleDescription => "神級極限效能版 (雙計時器 + 絕對防崩潰裝甲)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -57,7 +54,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private bool _isMatchLive = false;
     private bool _isChangingMap = false; 
     
-    // 【新增】雙獨立計時器，效能極限分離
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
 
@@ -84,9 +80,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
-            if (@event.Userid != null)
+            var player = @event.Userid;
+            // 【裝甲防護】加入 Handle 檢查，避免在斷線邊緣抓取 SteamID 崩潰
+            if (player != null && player.IsValid && player.Handle != IntPtr.Zero)
             {
-                ulong steamId = @event.Userid.SteamID;
+                ulong steamId = player.SteamID;
                 _readyPlayers.Remove(steamId);
                 _playerUnreadyTime.Remove(steamId);
                 
@@ -98,7 +96,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
             var player = @event.Userid;
-            if (player != null && player.IsValid)
+            // 【裝甲防護】
+            if (player != null && player.IsValid && player.Handle != IntPtr.Zero)
             {
                 ulong steamId = player.SteamID;
                 int newTeam = @event.Team; 
@@ -137,23 +136,28 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     {
         Server.NextFrame(() => {
             if (!_isMatchLive) return;
-
-            int activeT = 0;
-            int activeCT = 0;
-            
-            foreach (var p in Utilities.GetPlayers())
+            // 【裝甲防護】加掛 try-catch 確保 NextFrame 執行時遇到死實體不會崩潰
+            try 
             {
-                if (p != null && p.IsValid && !p.IsBot)
+                int activeT = 0;
+                int activeCT = 0;
+                
+                foreach (var p in Utilities.GetPlayers())
                 {
-                    if (p.TeamNum == 2) activeT++;
-                    if (p.TeamNum == 3) activeCT++;
+                    // 【裝甲防護】嚴格的 Handle 檢查
+                    if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot)
+                    {
+                        if (p.TeamNum == 2) activeT++;
+                        if (p.TeamNum == 3) activeCT++;
+                    }
                 }
-            }
 
-            if (activeT == 0 || activeCT == 0)
-            {
-                AbortMatch();
-            }
+                if (activeT == 0 || activeCT == 0)
+                {
+                    AbortMatch();
+                }
+            } 
+            catch (Exception) { /* 吞掉例外，保護伺服器不卡頓 */ }
         });
     }
 
@@ -188,7 +192,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             int currentTeamCount = 0;
             foreach (var p in Utilities.GetPlayers())
             {
-                if (p != null && p.IsValid && !p.IsBot && p.TeamNum == teamIndex && p.SteamID != player.SteamID)
+                // 【裝甲防護】
+                if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && p.TeamNum == teamIndex && p.SteamID != player.SteamID)
                 {
                     currentTeamCount++;
                 }
@@ -319,7 +324,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _isMatchLive = true;
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}所有玩家已準備，比賽開始！");
             
-            // 【修改】比賽開始時，殺死兩個獨立計時器
             _privateCheckTimer?.Kill();
             _privateCheckTimer = null;
             _publicBroadcastTimer?.Kill();
@@ -366,65 +370,75 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     }
 
     // ==========================================
-    // 【新增拆分】邏輯 1：私下警告與踢出倒數 (60秒執行一次)
+    // 【修改】邏輯 1：私下警告與踢出，套用無敵裝甲
     // ==========================================
     private void CheckAndWarnUnreadyPlayers()
     {
         if (_isMatchLive) return; 
 
-        foreach (var p in Utilities.GetPlayers())
+        try 
         {
-            if (p != null && p.IsValid && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
+            foreach (var p in Utilities.GetPlayers())
             {
-                ulong steamId = p.SteamID;
-                if (!_readyPlayers.Contains(steamId))
+                // 【裝甲防護】加入 Handle 檢查，杜絕鬼魂指針導致計時器崩潰
+                if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
                 {
-                    if (!_playerUnreadyTime.ContainsKey(steamId)) _playerUnreadyTime[steamId] = 0;
-                    _playerUnreadyTime[steamId] += Config.UnreadyReminderInterval;
+                    ulong steamId = p.SteamID;
+                    if (!_readyPlayers.Contains(steamId))
+                    {
+                        if (!_playerUnreadyTime.ContainsKey(steamId)) _playerUnreadyTime[steamId] = 0;
+                        _playerUnreadyTime[steamId] += Config.UnreadyReminderInterval;
 
-                    if (_playerUnreadyTime[steamId] >= Config.KickUnreadyPlayerTime) 
-                    {
-                        string kickedName = p.PlayerName;
-                        Server.NextFrame(() => {
-                            Server.ExecuteCommand($"kickid {p.UserId} Unready_Timeout");
-                        });
-                        Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Lime}{kickedName} {ChatColors.White}因 未 準 備 好 而 被 踢 出");
-                        _playerUnreadyTime.Remove(steamId);
-                    }
-                    else
-                    {
-                        int timeLeft = Config.KickUnreadyPlayerTime - _playerUnreadyTime[steamId];
-                        p.PrintToChat($" {_cachedPrefix} 你尚未準備，請輸入 {ChatColors.Lime}!R{ChatColors.White}，{ChatColors.Red}{timeLeft}{ChatColors.White} 秒未準備將被踢出");
+                        if (_playerUnreadyTime[steamId] >= Config.KickUnreadyPlayerTime) 
+                        {
+                            string kickedName = p.PlayerName;
+                            Server.NextFrame(() => {
+                                Server.ExecuteCommand($"kickid {p.UserId} Unready_Timeout");
+                            });
+                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Lime}{kickedName} {ChatColors.White}因 未 準 備 好 而 被 踢 出");
+                            _playerUnreadyTime.Remove(steamId);
+                        }
+                        else
+                        {
+                            int timeLeft = Config.KickUnreadyPlayerTime - _playerUnreadyTime[steamId];
+                            p.PrintToChat($" {_cachedPrefix} 你尚未準備，請輸入 {ChatColors.Lime}!R{ChatColors.White}，{ChatColors.Red}{timeLeft}{ChatColors.White} 秒未準備將被踢出");
+                        }
                     }
                 }
             }
-        }
+        } 
+        catch (Exception) { /* 吞掉錯誤，保證下次 60 秒計時器依然存活！ */ }
     }
 
     // ==========================================
-    // 【新增拆分】邏輯 2：全頻公開處刑名單廣播 (15秒執行一次)
+    // 【修改】邏輯 2：全頻公開處刑名單，套用無敵裝甲
     // ==========================================
     private void BroadcastUnreadyPlayers()
     {
         if (_isMatchLive) return; 
         
-        _unreadyNamesCache.Clear();
-
-        foreach (var p in Utilities.GetPlayers())
+        try 
         {
-            if (p != null && p.IsValid && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
+            _unreadyNamesCache.Clear();
+
+            foreach (var p in Utilities.GetPlayers())
             {
-                if (!_readyPlayers.Contains(p.SteamID))
+                // 【裝甲防護】加入 Handle 檢查
+                if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
                 {
-                    _unreadyNamesCache.Add(p.PlayerName); 
+                    if (!_readyPlayers.Contains(p.SteamID))
+                    {
+                        _unreadyNamesCache.Add(p.PlayerName); 
+                    }
                 }
             }
+            
+            if (_unreadyNamesCache.Count > 0) 
+            {
+                Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}");
+            }
         }
-        
-        if (_unreadyNamesCache.Count > 0) 
-        {
-            Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}");
-        }
+        catch (Exception) { /* 吞掉錯誤，保證下次 15 秒計時器依然存活！ */ }
     }
 
     private void ResetMatchState()
@@ -434,7 +448,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
         
-        // 【修改】啟動雙獨立引擎
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);
         

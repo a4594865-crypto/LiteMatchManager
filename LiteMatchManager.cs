@@ -38,9 +38,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "5.3_GodTier_Strict";
+    public override string ModuleVersion => "5.4_GodTier_Flawless";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "神級極限效能版 (絕對 0 GC + 結算地圖顯示 + 嚴格指令與即時開賽)";
+    public override string ModuleDescription => "神級極限效能版 (防換隊漏洞 + 結算換圖 + 即時開賽)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -88,9 +88,30 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             return HookResult.Continue;
         });
 
+        // ==========================================
+        // 【終極修復】攔截：玩家變更隊伍 (包含跳去觀戰)
+        // ==========================================
+        RegisterEventHandler<EventPlayerTeam>((@event, info) =>
+        {
+            var player = @event.Userid;
+            if (player != null && player.IsValid)
+            {
+                ulong steamId = player.SteamID;
+                
+                // 嚴格把關：只有在「非比賽期間(暖身)」，且「原本已經準備」的人換隊伍，才會拔除狀態
+                if (!_isMatchLive && _readyPlayers.Contains(steamId))
+                {
+                    _readyPlayers.Remove(steamId);
+                    _playerUnreadyTime[steamId] = 0; // 重置踢人倒數
+                    
+                    Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Red}{player.PlayerName}{ChatColors.White} 變更了隊伍，系統已強制取消他的準備狀態！");
+                }
+            }
+            return HookResult.Continue;
+        });
+
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
         
-        // 註冊：攔截比賽結算畫面
         RegisterEventHandler<EventCsWinPanelMatch>(OnMatchEnd);
 
         RegisterListener<Listeners.OnMapStart>(mapName => 
@@ -140,7 +161,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             char c = rawArg[i];
             if (c == '"' || c == ' ') continue; 
             
-            // 嚴格限制：只有 '!' 開頭的字串才被視為指令，拔除 '.'
             if (c == '!')
             {
                 isCommand = true;
@@ -159,13 +179,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             return HookResult.Handled;
         }
 
-        // 嚴格限制：只允許 !r 和 !ready
         if (command == "!r" || command == "!ready")
         {
             if (!_isMatchLive) HandlePlayerReady(player);
             return HookResult.Handled; 
         }
-        // 嚴格限制：只允許 !unready
         else if (command == "!unready")
         {
             if (!_isMatchLive) HandlePlayerUnready(player);
@@ -194,7 +212,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         if (isMatchEnd)
         {
-            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Gold}比賽結束！正在切換地圖：{ChatColors.Lime}{mapName} {ChatColors.Gold}開始下一場決鬥");
+            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Gold}比賽結束！正在切換地圖：{ChatColors.Lime}{mapName}");
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{Config.MapChangeDelay} 秒後 {ChatColors.Gold}自動載入...");
         }
         else
@@ -236,9 +254,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
     }
 
-    // ==========================================
-    // 【修改】滿人後瞬間開打，拔除 3 秒計時器延遲
-    // ==========================================
     private void CheckMatchStart()
     {
         if (_isMatchLive) return;
@@ -250,7 +265,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _globalCheckTimer?.Kill();
             _globalCheckTimer = null;
 
-            // 直接執行 live.cfg
             Server.ExecuteCommand($"exec {Config.LiveConfigName}");
         }
     }
@@ -327,7 +341,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     else
                     {
                         int timeLeft = Config.KickUnreadyPlayerTime - _playerUnreadyTime[steamId];
-                        p.PrintToChat($" {_cachedPrefix} 你尚未準備，請輸入 {ChatColors.Green}!R{ChatColors.White}，再過 {ChatColors.Red}{timeLeft}{ChatColors.White} 秒未準備將被踢出！");
+                        p.PrintToChat($" {_cachedPrefix} 你尚未準備，請輸入 {ChatColors.lime}!R{ChatColors.White}，{ChatColors.Red}{timeLeft}{ChatColors.White} 秒未準備將被踢出");
                     }
                 }
             }
@@ -335,7 +349,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         
         if (_unreadyNamesCache.Count > 0) 
         {
-            Server.PrintToChatAll($" {_cachedPrefix} 目前未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}");
+            Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}");
         }
     }
 

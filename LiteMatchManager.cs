@@ -221,7 +221,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         _readyPlayers.Add(steamId);
         _playerUnreadyTime.Remove(steamId); 
-        Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}{player.PlayerName}{ChatColors.White} 已準備！ 目前進度：{ChatColors.Green}{_readyPlayers.Count} / {Config.MinPlayersToStart}");
+        Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}{player.PlayerName}{ChatColors.White} 已準備！ 準備進度：{ChatColors.Red}{_readyPlayers.Count}{ChatColors.Green} / {Config.MinPlayersToStart}");
         CheckMatchStart();
     }
 
@@ -232,7 +232,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             _readyPlayers.Remove(steamId);
             _playerUnreadyTime[steamId] = 0; 
-            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Red}{player.PlayerName}{ChatColors.White} 取消了準備！ 目前進度：{ChatColors.Red}{_readyPlayers.Count} / {Config.MinPlayersToStart}");
+            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Red}{player.PlayerName}{ChatColors.White} 取消了準備！ 準備進度：{ChatColors.Red}{_readyPlayers.Count}{ChatColors.Green} / {Config.MinPlayersToStart}");
         }
     }
 

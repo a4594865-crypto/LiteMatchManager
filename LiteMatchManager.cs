@@ -38,9 +38,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "5.2_GodTier_AutoMap";
+    public override string ModuleVersion => "5.3_GodTier_Strict";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "神級極限效能版 (絕對 0 GC + 結算地圖顯示)";
+    public override string ModuleDescription => "神級極限效能版 (絕對 0 GC + 結算地圖顯示 + 嚴格指令與即時開賽)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -139,7 +139,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             char c = rawArg[i];
             if (c == '"' || c == ' ') continue; 
-            if (c == '!' || c == '.')
+            
+            // 嚴格限制：只有 '!' 開頭的字串才被視為指令，拔除 '.'
+            if (c == '!')
             {
                 isCommand = true;
             }
@@ -152,18 +154,19 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         if (command == "!nextmap")
         {
-            // 傳入 false 代表是管理員手動換圖
             if (AdminManager.PlayerHasPermissions(player, "@css/root")) TriggerMapChange(false);
             else player.PrintToChat($" {_cachedPrefix} {ChatColors.Red}你沒有權限執行此指令。");
             return HookResult.Handled;
         }
 
-        if (command == "!r" || command == "!ready" || command == ".r" || command == ".ready")
+        // 嚴格限制：只允許 !r 和 !ready
+        if (command == "!r" || command == "!ready")
         {
             if (!_isMatchLive) HandlePlayerReady(player);
             return HookResult.Handled; 
         }
-        else if (command == "!unready" || command == ".unready")
+        // 嚴格限制：只允許 !unready
+        else if (command == "!unready")
         {
             if (!_isMatchLive) HandlePlayerUnready(player);
             return HookResult.Handled;
@@ -177,9 +180,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         return HookResult.Continue;
     }
 
-    // ==========================================
-    // 【修改】自動地圖輪替邏輯：整合提示訊息
-    // ==========================================
     private void TriggerMapChange(bool isMatchEnd = false)
     {
         if (_isChangingMap || Config.MapList == null || Config.MapList.Count == 0) return;
@@ -192,10 +192,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         string mapName = parts[0];
         string workshopId = parts.Length > 1 ? parts[1] : "";
 
-        // 根據是否為比賽結束，發送不同的完美排版訊息
         if (isMatchEnd)
         {
-            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Gold}比賽結束！正在切換地圖：{ChatColors.Lime}{mapName}");
+            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Gold}比賽結束！正在切換地圖：{ChatColors.Lime}{mapName} {ChatColors.Gold}開始下一場決鬥");
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{Config.MapChangeDelay} 秒後 {ChatColors.Gold}自動載入...");
         }
         else
@@ -237,20 +236,22 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
     }
 
+    // ==========================================
+    // 【修改】滿人後瞬間開打，拔除 3 秒計時器延遲
+    // ==========================================
     private void CheckMatchStart()
     {
         if (_isMatchLive) return;
         if (_readyPlayers.Count >= Config.MinPlayersToStart)
         {
             _isMatchLive = true;
-            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}所有玩家已準備，比賽即將開始！");
+            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}所有玩家已準備，比賽開始！");
             
             _globalCheckTimer?.Kill();
             _globalCheckTimer = null;
 
-            AddTimer(3.0f, () => {
-                Server.ExecuteCommand($"exec {Config.LiveConfigName}");
-            });
+            // 直接執行 live.cfg
+            Server.ExecuteCommand($"exec {Config.LiveConfigName}");
         }
     }
 
@@ -349,16 +350,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _globalCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckUnreadyPlayers, TimerFlags.REPEAT);
     }
 
-    // ==========================================
-    // 【修改】自動地圖輪替：攔截比賽結束
-    // ==========================================
     private HookResult OnMatchEnd(EventCsWinPanelMatch @event, GameEventInfo info)
     {
         if (!_isMatchLive) return HookResult.Continue;
-
-        // 直接呼叫換圖函數，並標記為 true (代表是比賽結束觸發的)
         TriggerMapChange(true);
-
         return HookResult.Continue;
     }
 }

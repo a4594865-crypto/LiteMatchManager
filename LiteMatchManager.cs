@@ -40,9 +40,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "6.1_GodTier_ArmoredTimer";
+    public override string ModuleVersion => "6.2_GodTier_Final";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "神級極限效能版 (雙計時器 + 絕對防崩潰裝甲)";
+    public override string ModuleDescription => "神級極限效能版 (修正斷線幽靈殘留 + 絕對防崩潰裝甲)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -81,14 +81,22 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
             var player = @event.Userid;
-            // 【裝甲防護】加入 Handle 檢查，避免在斷線邊緣抓取 SteamID 崩潰
-            if (player != null && player.IsValid && player.Handle != IntPtr.Zero)
+            // 【極限修正】斷線瞬間實體可能已標記為無效(IsValid=false)。
+            // 放寬條件，只要 player 物件還在，就強行抓取 SteamID 拔除狀態！
+            if (player != null)
             {
-                ulong steamId = player.SteamID;
-                _readyPlayers.Remove(steamId);
-                _playerUnreadyTime.Remove(steamId);
-                
-                if (_isMatchLive) CheckAndResetGameImmediate();
+                try 
+                {
+                    ulong steamId = player.SteamID;
+                    if (steamId > 0)
+                    {
+                        _readyPlayers.Remove(steamId);
+                        _playerUnreadyTime.Remove(steamId);
+                        
+                        if (_isMatchLive) CheckAndResetGameImmediate();
+                    }
+                } 
+                catch (Exception) { /* 吞掉斷線極限瞬間可能產生的抓取錯誤，不影響伺服器 */ }
             }
             return HookResult.Continue;
         });
@@ -96,7 +104,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
             var player = @event.Userid;
-            // 【裝甲防護】
+            // 換隊時玩家是存活的，維持最嚴格的裝甲防護
             if (player != null && player.IsValid && player.Handle != IntPtr.Zero)
             {
                 ulong steamId = player.SteamID;
@@ -136,7 +144,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     {
         Server.NextFrame(() => {
             if (!_isMatchLive) return;
-            // 【裝甲防護】加掛 try-catch 確保 NextFrame 執行時遇到死實體不會崩潰
             try 
             {
                 int activeT = 0;
@@ -144,7 +151,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 
                 foreach (var p in Utilities.GetPlayers())
                 {
-                    // 【裝甲防護】嚴格的 Handle 檢查
                     if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot)
                     {
                         if (p.TeamNum == 2) activeT++;
@@ -157,7 +163,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     AbortMatch();
                 }
             } 
-            catch (Exception) { /* 吞掉例外，保護伺服器不卡頓 */ }
+            catch (Exception) { }
         });
     }
 
@@ -192,7 +198,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             int currentTeamCount = 0;
             foreach (var p in Utilities.GetPlayers())
             {
-                // 【裝甲防護】
                 if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && p.TeamNum == teamIndex && p.SteamID != player.SteamID)
                 {
                     currentTeamCount++;
@@ -369,9 +374,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ] 、{ChatColors.Orange}!awp {ChatColors.White}[ AWP狙擊步槍 ]");
     }
 
-    // ==========================================
-    // 【修改】邏輯 1：私下警告與踢出，套用無敵裝甲
-    // ==========================================
     private void CheckAndWarnUnreadyPlayers()
     {
         if (_isMatchLive) return; 
@@ -380,7 +382,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             foreach (var p in Utilities.GetPlayers())
             {
-                // 【裝甲防護】加入 Handle 檢查，杜絕鬼魂指針導致計時器崩潰
                 if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
                 {
                     ulong steamId = p.SteamID;
@@ -407,12 +408,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 }
             }
         } 
-        catch (Exception) { /* 吞掉錯誤，保證下次 60 秒計時器依然存活！ */ }
+        catch (Exception) { }
     }
 
-    // ==========================================
-    // 【修改】邏輯 2：全頻公開處刑名單，套用無敵裝甲
-    // ==========================================
     private void BroadcastUnreadyPlayers()
     {
         if (_isMatchLive) return; 
@@ -423,7 +421,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
             foreach (var p in Utilities.GetPlayers())
             {
-                // 【裝甲防護】加入 Handle 檢查
                 if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
                 {
                     if (!_readyPlayers.Contains(p.SteamID))
@@ -438,7 +435,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}");
             }
         }
-        catch (Exception) { /* 吞掉錯誤，保證下次 15 秒計時器依然存活！ */ }
+        catch (Exception) { }
     }
 
     private void ResetMatchState()

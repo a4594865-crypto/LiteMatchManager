@@ -368,20 +368,87 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         return HookResult.Continue;
     }
 
-    private bool HandleWeaponCommand(CCSPlayerController player, string command)
+   private bool HandleWeaponCommand(CCSPlayerController player, string command)
     {
         if (!player.PawnIsAlive) return false;
+        
         switch (command)
         {
-            case "!dg": player.GiveNamedItem("weapon_deagle"); return true;
-            case "!usp": player.GiveNamedItem("weapon_usp_silencer"); return true;
-            case "!gk": player.GiveNamedItem("weapon_glock"); return true;
-            case "!r8": player.GiveNamedItem("weapon_revolver"); return true;
-            case "!ssg": player.GiveNamedItem("weapon_ssg08"); return true;
-            case "!awp": player.GiveNamedItem("weapon_awp"); return true;
+            case "!dg": ReplaceWeapon(player, "weapon_deagle"); return true;
+            case "!usp": ReplaceWeapon(player, "weapon_usp_silencer"); return true;
+            case "!gk": ReplaceWeapon(player, "weapon_glock"); return true;
+            case "!r8": ReplaceWeapon(player, "weapon_revolver"); return true;
+            case "!ssg": ReplaceWeapon(player, "weapon_ssg08"); return true;
+            case "!awp": ReplaceWeapon(player, "weapon_awp"); return true;
             case "!gs": OnGsCommand(player, null!); return true;
         }
         return false;
+    }
+
+   // 【新增】預先將手槍清單存入 Hash 表，查詢速度 O(1)，壓榨出極致效能
+    private static readonly HashSet<string> PistolNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "weapon_deagle", "weapon_usp_silencer", "weapon_glock", "weapon_revolver",
+        "weapon_p250", "weapon_cz75a", "weapon_tec9", "weapon_fiveseven", 
+        "weapon_elite", "weapon_hkp2000"
+    };
+
+    private bool HandleWeaponCommand(CCSPlayerController player, string command)
+    {
+        if (!player.PawnIsAlive) return false;
+        
+        switch (command)
+        {
+            case "!dg": ReplaceWeapon(player, "weapon_deagle"); return true;
+            case "!usp": ReplaceWeapon(player, "weapon_usp_silencer"); return true;
+            case "!gk": ReplaceWeapon(player, "weapon_glock"); return true;
+            case "!r8": ReplaceWeapon(player, "weapon_revolver"); return true;
+            case "!ssg": ReplaceWeapon(player, "weapon_ssg08"); return true;
+            case "!awp": ReplaceWeapon(player, "weapon_awp"); return true;
+            case "!gs": OnGsCommand(player, null!); return true;
+        }
+        return false;
+    }
+
+    // 【新增】專屬換槍系統：自動判斷並沒收佔用槽位的舊武器
+    private void ReplaceWeapon(CCSPlayerController player, string newWeapon)
+    {
+        var pawn = player.PlayerPawn.Value;
+        if (pawn == null || pawn.WeaponServices == null || pawn.WeaponServices.MyWeapons == null) return;
+
+        // 判斷玩家要求的是不是手槍
+        bool isRequestingPistol = PistolNames.Contains(newWeapon);
+
+        // 掃描身上的裝備
+        foreach (var weaponHandle in pawn.WeaponServices.MyWeapons)
+        {
+            var weapon = weaponHandle.Value;
+            if (weapon != null && weapon.IsValid)
+            {
+                string wName = weapon.DesignerName;
+                if (string.IsNullOrEmpty(wName)) continue;
+
+                // 遇到刀子或 C4 直接跳過
+                if (wName.Contains("knife") || wName.Contains("bayonet") || wName.Contains("c4")) continue;
+
+                bool isCurrentPistol = PistolNames.Contains(wName);
+
+                // 命中對應槽位：刪除並立刻中斷迴圈 (break) 節省運算
+                if (isRequestingPistol && isCurrentPistol)
+                {
+                    weapon.Remove();
+                    break; 
+                }
+                else if (!isRequestingPistol && !isCurrentPistol)
+                {
+                    weapon.Remove();
+                    break; 
+                }
+            }
+        }
+
+        // 槽位清空，發放新槍
+        player.GiveNamedItem(newWeapon);
     }
 
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)

@@ -507,16 +507,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private void CheckAndWarnUnreadyPlayers()
     {
         if (_isMatchLive) return; 
+
         try 
         {
-            // 【新增】先取得動態人數
-            int targetPlayers = GetDynamicRequiredPlayers(); 
-            
-            // 【新增】根據目標人數，動態決定要顯示哪一句提示
-     string modeHint = targetPlayers == 2 
-                    ? $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}2 {ChatColors.White}人，雙 方 輸 入 {ChatColors.Orange}!R {ChatColors.White}即 可 直 接 {ChatColors.Green}1 v 1 單 挑{ChatColors.White}"
-                    : $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}4 {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}2 v 2 團戰{ChatColors.White}";
-
             foreach (var p in Utilities.GetPlayers())
             {
                 if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
@@ -530,7 +523,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         if (_playerUnreadyTime[steamId] >= Config.KickUnreadyPlayerTime) 
                         {
                             string kickedName = p.PlayerName;
-                            Server.NextFrame(() => { Server.ExecuteCommand($"kickid {p.UserId} Unready_Timeout"); });
+                            Server.NextFrame(() => {
+                                Server.ExecuteCommand($"kickid {p.UserId} Unready_Timeout");
+                            });
                             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Lime}{kickedName} {ChatColors.White}因 未 準 備 好 而 被 踢 出");
                             _playerUnreadyTime.Remove(steamId);
                         }
@@ -538,9 +533,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         {
                             int timeLeft = Config.KickUnreadyPlayerTime - _playerUnreadyTime[steamId];
                             p.PrintToChat($" {_cachedPrefix} 請輸入 {ChatColors.Lime}!R{ChatColors.White} 準備 ，{ChatColors.Lime}{timeLeft}{ChatColors.White} 秒未準備將被踢出");
-                            
-                            // 這裡只會印出符合當下情況的那一行
-                            p.PrintToChat(modeHint); 
                         }
                     }
                 }

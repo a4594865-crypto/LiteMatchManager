@@ -213,17 +213,12 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         });
     }
 
-    private HookResult OnJoinTeam(CCSPlayerController? player, CommandInfo info)
+   private HookResult OnJoinTeam(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null || !player.IsValid) return HookResult.Continue;
         if (!int.TryParse(info.GetArg(1), out int teamIndex)) return HookResult.Continue;
 
-        // 【新增】防護罩：對戰中嚴格禁止中途加入
-        if (_isMatchLive && (teamIndex == 2 || teamIndex == 3))
-        {
-            player.PrintToChat($" {_cachedPrefix} {ChatColors.Red}對戰已經開始，無法中途加入！請在旁觀者模式等待。");
-            return HookResult.Handled;
-        }
+        // （已移除：對戰中嚴格禁止中途加入的防護罩）
 
         if (teamIndex == 2 || teamIndex == 3)
         {

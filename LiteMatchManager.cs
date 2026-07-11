@@ -22,6 +22,8 @@ public class LiteMatchConfig : BasePluginConfig
     
     [JsonPropertyName("UnreadyReminderInterval")] public int UnreadyReminderInterval { get; set; } = 60;
     [JsonPropertyName("PublicUnreadyReminderInterval")] public int PublicUnreadyReminderInterval { get; set; } = 15;
+    
+    [JsonPropertyName("WaitingForOpponentInterval")] public int WaitingForOpponentInterval { get; set; } = 30;
 
     [JsonPropertyName("ChatPrefix")] public string ChatPrefix { get; set; } = "[ {Green}2 v 2 對 戰 模 式{White} ]";
     [JsonPropertyName("EnableChatWeaponCommands")] public bool EnableChatWeaponCommands { get; set; } = true;
@@ -40,9 +42,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "7.0_Dynamic_Matchmaking";
+    public override string ModuleVersion => "7.2_Dynamic_Ultimate";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "全自動人數偵測 + 完美換槍 + 解除中途加入限制";
+    public override string ModuleDescription => "全動態開賽 + 雙層智能廣播 + 斷線即時偵測";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -51,7 +53,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private Dictionary<ulong, int> _playerUnreadyTime = new(64); 
     private List<string> _unreadyNamesCache = new(64); 
     
-    // 【新增】用來記憶每個玩家偏好的主副武器
     private Dictionary<ulong, string> _playerPrimary = new(64);
     private Dictionary<ulong, string> _playerSecondary = new(64);
     
@@ -60,8 +61,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
 
-    // 手槍清單，用於極速換槍判定
     private static readonly HashSet<string> PistolNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "weapon_deagle", "weapon_usp_silencer", "weapon_glock", "weapon_revolver",
@@ -86,7 +87,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v7.0 (動態開賽版) 初始化！   ");
+        Console.WriteLine("    LiteMatchManager v7.2 (動態終極版) 初始化！   ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -94,7 +95,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         AddCommandListener("jointeam", OnJoinTeam);
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
         
-        // 沒收丟槍
         AddCommandListener("drop", (player, info) => {
             return HookResult.Handled;
         });
@@ -111,12 +111,18 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     {
                         _readyPlayers.Remove(steamId);
                         _playerUnreadyTime.Remove(steamId);
-                        
-                        // 【新增】玩家離開時，把他的武器記憶刪除
                         _playerPrimary.Remove(steamId);
                         _playerSecondary.Remove(steamId);
 
-                        if (_isMatchLive) CheckAndResetGameImmediate();
+                        if (_isMatchLive) 
+                        {
+                            CheckAndResetGameImmediate();
+                        }
+                        else 
+                        {
+                            // 【新增智能檢查】如果有玩家斷線，立刻檢查剩下的玩家是否剛好能開賽
+                            CheckMatchStart(); 
+                        }
                     }
                 } 
                 catch (Exception) { }
@@ -134,15 +140,18 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 
                 if (!_isMatchLive)
                 {
-                    if (newTeam == 0 || newTeam == 1)
+                    if (newTeam == 0 || newTeam == 1) // 加入觀戰
                     {
                         if (_readyPlayers.Contains(steamId))
                         {
                             _readyPlayers.Remove(steamId);
-                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 取 消 他 的 準 備");
+                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 消 他 的 準 備");
                         }
                         _playerUnreadyTime.Remove(steamId); 
                     }
+                    
+                    // 【新增智能檢查】不管他是跳觀戰還是選陣營，都重新掃描一次是否能開賽
+                    CheckMatchStart(); 
                 }
                 else
                 {
@@ -165,7 +174,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         });
     }
 
-    // 【新增】動態計算當前需要的開賽人數
     private int GetDynamicRequiredPlayers()
     {
         int activeT = 0;
@@ -179,9 +187,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             }
         }
         int total = activeT + activeCT;
-        
-        // 如果場上只有 1~2 人，目標人數就是 2 (準備單挑)
-        // 如果場上超過 2 人 (如 3~4 人)，目標人數就是 Config 的最大設定 (準備團戰)
         return total <= 2 ? 2 : Config.MinPlayersToStart;
     }
 
@@ -226,15 +231,12 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         if (player == null || !player.IsValid) return HookResult.Continue;
         if (!int.TryParse(info.GetArg(1), out int teamIndex)) return HookResult.Continue;
 
-        // 【重新加回防護罩】只要比賽一開始，競技場大門立刻鎖死！
-        // 完美防止 1v1 被第 3 人亂入，也防止 2v2 被干擾。
         if (_isMatchLive && (teamIndex == 2 || teamIndex == 3))
         {
             player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}對戰已經開始，無法中途加入！請在旁觀者模式等待");
             return HookResult.Handled; 
         }
 
-        // 暖身階段的正常滿員檢查
         if (teamIndex == 2 || teamIndex == 3)
         {
             int currentTeamCount = 0;
@@ -340,7 +342,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _readyPlayers.Add(steamId);
         _playerUnreadyTime.Remove(steamId); 
         
-        // 廣播顯示動態人數
         int targetPlayers = GetDynamicRequiredPlayers();
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}{player.PlayerName}{ChatColors.White} 已 準 備！準 備 進 度：{ChatColors.Green}{_readyPlayers.Count} / {targetPlayers}");
         
@@ -355,13 +356,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _readyPlayers.Remove(steamId);
             _playerUnreadyTime[steamId] = 0; 
             
-            // 廣播顯示動態人數
             int targetPlayers = GetDynamicRequiredPlayers();
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Red}{player.PlayerName}{ChatColors.White} 取 消 了 準 備！準 備 進 度：{ChatColors.Green}{_readyPlayers.Count} / {targetPlayers}");
         }
     }
 
-    // 【修改】純淨全自動：動態判斷 1v1 或 2v2 開賽邏輯
     private void CheckMatchStart()
     {
         if (_isMatchLive) return;
@@ -377,14 +376,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
         int totalPlayers = activeT + activeCT;
 
-        // 防呆機制：總人數必須是 2 人(單挑) 或 達標人數(團戰)
         if (totalPlayers != 2 && totalPlayers != Config.MinPlayersToStart) return;
-
-        // 公平機制：隊伍必須絕對平衡 (1v1 或 2v2)
         if (activeT != activeCT) return;
 
-        // 意願機制：準備人數必須大於等於場上總人數
-        if (_readyPlayers.Count >= totalPlayers)
+        if (_readyPlayers.Count >= totalPlayers && totalPlayers > 0)
         {
             _isMatchLive = true;
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
@@ -396,6 +391,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _privateCheckTimer = null;
             _publicBroadcastTimer?.Kill();
             _publicBroadcastTimer = null;
+            _waitingTimer?.Kill();
+            _waitingTimer = null;
             
             Console.WriteLine($"[LiteMatch] [MatchLive] 雙方準備就緒 ({modeText})！正式執行開賽設定檔：{Config.LiveConfigName}");
             Server.NextFrame(() => { Server.ExecuteCommand($"exec {Config.LiveConfigName}"); });
@@ -409,25 +406,20 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         
         ulong steamId = player.SteamID;
         
-        // 【修改】不使用 Timer，改用雙重 NextFrame (等待 2 個引擎 Tick) 避開動畫衝突
         Server.NextFrame(() => {
             Server.NextFrame(() => {
-                // 再次進行完整的安全檢查，確保這 2 幀過後玩家依然活著且有效
                 if (player == null || !player.IsValid || player.PlayerPawn == null || !player.PlayerPawn.IsValid || !player.PawnIsAlive) return;
                 
                 player.RemoveWeapons(); 
                 
-                // 【修改】加入武器記憶讀取判斷
                 foreach (var item in Config.SpawnWeapons) 
                 { 
                     string weaponToGive = item;
 
-                    // 判斷 1：如果設定檔這把槍是手槍，且玩家有自己偏好的手槍記憶
                     if (PistolNames.Contains(item))
                     {
                         if (_playerSecondary.TryGetValue(steamId, out string? prefSec)) weaponToGive = prefSec;
                     }
-                    // 判斷 2：如果設定檔這把槍是主武器 (非手槍、非刀)，且玩家有偏好的主武器記憶
                     else if (item.StartsWith("weapon_") && !item.Contains("knife") && !item.Contains("bayonet"))
                     {
                         if (_playerPrimary.TryGetValue(steamId, out string? prefPri)) weaponToGive = prefPri;
@@ -446,16 +438,13 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         if (!player.PawnIsAlive) return false;
         ulong steamId = player.SteamID;
         
-        // 【修改】換槍的同時，將玩家的選擇抄進筆記本裡
         switch (command)
         {
-            // 手槍類：寫入副武器記憶
             case "!dg": _playerSecondary[steamId] = "weapon_deagle"; ReplaceWeapon(player, "weapon_deagle"); return true;
             case "!usp": _playerSecondary[steamId] = "weapon_usp_silencer"; ReplaceWeapon(player, "weapon_usp_silencer"); return true;
             case "!gk": _playerSecondary[steamId] = "weapon_glock"; ReplaceWeapon(player, "weapon_glock"); return true;
             case "!r8": _playerSecondary[steamId] = "weapon_revolver"; ReplaceWeapon(player, "weapon_revolver"); return true;
             
-            // 狙擊類：寫入主武器記憶
             case "!ssg": _playerPrimary[steamId] = "weapon_ssg08"; ReplaceWeapon(player, "weapon_ssg08"); return true;
             case "!awp": _playerPrimary[steamId] = "weapon_awp"; ReplaceWeapon(player, "weapon_awp"); return true;
             
@@ -483,7 +472,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 if ((isRequestingPistol && isCurrentPistol) || (!isRequestingPistol && !isCurrentPistol))
                 {
                     weapon.Remove();
-                    // 【修改】不使用 Timer，利用下一個 Tick 發放新武器
                     Server.NextFrame(() => {
                         if (player.IsValid && player.PawnIsAlive) {
                             player.GiveNamedItem(newWeapon);
@@ -541,33 +529,70 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         catch (Exception) { }
     }
 
+    // 專門針對「全員已準備，但人數未達開賽標準」的等待計時器廣播
+    private void BroadcastWaitingMessage()
+    {
+        if (_isMatchLive) return;
+        
+        int totalPlayers = 0;
+        foreach (var p in Utilities.GetPlayers())
+        {
+            if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
+            {
+                totalPlayers++;
+            }
+        }
+
+        // 觸發條件：場上有人，且「所有人」都已經輸入 !R 準備好
+        if (totalPlayers > 0 && totalPlayers == _readyPlayers.Count)
+        {
+            int targetPlayers = GetDynamicRequiredPlayers();
+            string modeHint = "";
+
+            if (totalPlayers == 1)
+            {
+                modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}1 {ChatColors.White}人，等 待 對 手 加 入 {ChatColors.Green}1 v 1 {ChatColors.White}或 {ChatColors.Green}2 v 2 {ChatColors.White}對 戰";
+            }
+            else
+            {
+                modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}{totalPlayers} {ChatColors.White}人，等 待 對 手 加 入 {ChatColors.Green}2 v 2 {ChatColors.White}團 戰";
+            }
+
+            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}等 待 對 手 加 入 中... {ChatColors.Default}| 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
+            Server.PrintToChatAll(modeHint);
+        }
+    }
+
+    // 負責每 15 秒催促未準備玩家的廣播
     private void BroadcastUnreadyPlayers()
     {
         if (_isMatchLive) return; 
         try 
         {
             _unreadyNamesCache.Clear();
-            int totalPlayers = 0; // 【新增】加入算人頭的功能
+            int totalPlayers = 0; 
             
             foreach (var p in Utilities.GetPlayers())
             {
                 if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
                 {
-                    totalPlayers++; // 【新增】累加場上總人數
+                    totalPlayers++; 
                     if (!_readyPlayers.Contains(p.SteamID)) _unreadyNamesCache.Add(p.PlayerName); 
                 }
             }
             
-            // 【修改】條件加上 totalPlayers == 1，確保 1 個人在場時也能印出文字
-            if (_unreadyNamesCache.Count > 0 || totalPlayers == 1) 
+            // 隔離機制：如果場上「所有玩家」都已準備，直接交給等待計時器處理
+            if (totalPlayers > 0 && totalPlayers == _readyPlayers.Count) return;
+
+            // 只要有未準備玩家，或是人數大於等於 2 人，就執行
+            if (_unreadyNamesCache.Count > 0 || totalPlayers >= 2) 
             {
                 int targetPlayers = GetDynamicRequiredPlayers();
-                
-                // 【修改】透過簡單的 if-else 將你的文字填進去
                 string modeHint = "";
+
                 if (totalPlayers <= 1)
                 {
-                    modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}1 {ChatColors.White}人，等 待 對 手 加 入{ChatColors.Orange}1 v 1 {ChatColors.White}或 {ChatColors.Orange}2 v 2 {ChatColors.White}對 戰";
+                    modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}1 {ChatColors.White}人，請 輸 入 {ChatColors.Orange}!R {ChatColors.White}準 備";
                 }
                 else if (targetPlayers == 2)
                 {
@@ -578,13 +603,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}{Config.MinPlayersToStart} {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}2 v 2 團戰{ChatColors.White}";
                 }
                 
-                // 只有真的有人沒準備時，才印出點名名單 (避免 1 個人已準備卻被點名)
                 if (_unreadyNamesCache.Count > 0)
                 {
                     Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
                 }
                 
-                // 無論如何，都會跟著印出判斷好的動態文字
                 Server.PrintToChatAll(modeHint); 
             }
         }
@@ -603,6 +626,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         
         _publicBroadcastTimer?.Kill();
         _publicBroadcastTimer = AddTimer(Config.PublicUnreadyReminderInterval, BroadcastUnreadyPlayers, TimerFlags.REPEAT);
+
+        _waitingTimer?.Kill();
+        _waitingTimer = AddTimer(Config.WaitingForOpponentInterval, BroadcastWaitingMessage, TimerFlags.REPEAT);
     }
 
     private HookResult OnMatchEnd(EventCsWinPanelMatch @event, GameEventInfo info)

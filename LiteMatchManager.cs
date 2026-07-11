@@ -42,9 +42,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "7.2_Dynamic_Ultimate";
+    public override string ModuleVersion => "7.3_Timer_Fixed";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "全動態開賽 + 雙層智能廣播 + 斷線即時偵測";
+    public override string ModuleDescription => "全動態開賽 + 計時器精準重置校準";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -87,7 +87,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v7.2 (動態終極版) 初始化！   ");
+        Console.WriteLine("    LiteMatchManager v7.3 (計時器修復版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -120,7 +120,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         }
                         else 
                         {
-                            // 【新增智能檢查】如果有玩家斷線，立刻檢查剩下的玩家是否剛好能開賽
                             CheckMatchStart(); 
                         }
                     }
@@ -140,7 +139,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 
                 if (!_isMatchLive)
                 {
-                    if (newTeam == 0 || newTeam == 1) // 加入觀戰
+                    if (newTeam == 0 || newTeam == 1) 
                     {
                         if (_readyPlayers.Contains(steamId))
                         {
@@ -150,7 +149,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         _playerUnreadyTime.Remove(steamId); 
                     }
                     
-                    // 【新增智能檢查】不管他是跳觀戰還是選陣營，都重新掃描一次是否能開賽
                     CheckMatchStart(); 
                 }
                 else
@@ -346,6 +344,30 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}{player.PlayerName}{ChatColors.White} 已 準 備！準 備 進 度：{ChatColors.Green}{_readyPlayers.Count} / {targetPlayers}");
         
         CheckMatchStart();
+
+        // 【關鍵修復】如果打完 !R 之後，發現人數不足無法開賽，且所有人都已經準備好
+        if (!_isMatchLive)
+        {
+            int activePlayers = 0;
+            foreach (var p in Utilities.GetPlayers())
+            {
+                if (p != null && p.IsValid && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
+                {
+                    activePlayers++;
+                }
+            }
+
+            if (activePlayers > 0 && activePlayers == _readyPlayers.Count)
+            {
+                // 1. 立刻推播一次等待訊息給玩家看，讓他知道現在是等待狀態
+                BroadcastWaitingMessage();
+                
+                // 2. 殺死舊的計時器，並重新啟動全新的 30 秒計時器！
+                // 確保下一次廣播絕對是精準的 30 秒後，不再會有 1~2 秒就跑出來的問題！
+                _waitingTimer?.Kill();
+                _waitingTimer = AddTimer(Config.WaitingForOpponentInterval, BroadcastWaitingMessage, TimerFlags.REPEAT);
+            }
+        }
     }
 
     private void HandlePlayerUnready(CCSPlayerController player)
@@ -529,7 +551,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         catch (Exception) { }
     }
 
-    // 專門針對「全員已準備，但人數未達開賽標準」的等待計時器廣播
     private void BroadcastWaitingMessage()
     {
         if (_isMatchLive) return;
@@ -543,7 +564,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             }
         }
 
-        // 觸發條件：場上有人，且「所有人」都已經輸入 !R 準備好
         if (totalPlayers > 0 && totalPlayers == _readyPlayers.Count)
         {
             string modeHint = "";
@@ -557,11 +577,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}{totalPlayers} {ChatColors.White}人，等 待 對 手 加 入 {ChatColors.Green}2 v 2 {ChatColors.White}團 戰";
             }
 
-            // 【修改】只印出這一行，畫面更乾淨
             Server.PrintToChatAll(modeHint);
         }
     }
-    // 負責每 15 秒催促未準備玩家的廣播
+
     private void BroadcastUnreadyPlayers()
     {
         if (_isMatchLive) return; 
@@ -579,16 +598,13 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 }
             }
             
-            // 隔離機制：如果場上「所有玩家」都已準備，直接交給等待計時器處理
             if (totalPlayers > 0 && totalPlayers == _readyPlayers.Count) return;
 
-            // 只要有未準備玩家，或是人數大於等於 2 人，就執行
             if (_unreadyNamesCache.Count > 0 || totalPlayers >= 2) 
             {
                 int targetPlayers = GetDynamicRequiredPlayers();
                 string modeHint = "";
 
-                // 【修改】直接從 2 個人開始判斷，1 個人的動態判斷不顯示
                 if (totalPlayers == 2)
                 {
                     modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}2 {ChatColors.White}人，雙 方 輸 入 {ChatColors.Orange}!R {ChatColors.White}即 可 直 接 {ChatColors.Green}1 v 1 單 挑{ChatColors.White}";
@@ -598,13 +614,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}{Config.MinPlayersToStart} {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}2 v 2 團戰{ChatColors.White}";
                 }
                 
-                // 優先印出尚未準備的點名清單
                 if (_unreadyNamesCache.Count > 0)
                 {
                     Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
                 }
                 
-                // 【新增】如果 modeHint 裡面有字（也就是 2 人以上），才印出這行，避免單人時印出空白行
                 if (!string.IsNullOrEmpty(modeHint))
                 {
                     Server.PrintToChatAll(modeHint); 

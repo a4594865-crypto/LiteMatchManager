@@ -230,7 +230,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         // 完美防止 1v1 被第 3 人亂入，也防止 2v2 被干擾。
         if (_isMatchLive && (teamIndex == 2 || teamIndex == 3))
         {
-            player.PrintToChat($" {_cachedPrefix} {ChatColors.Red}對戰已經開始，無法中途加入！請在旁觀者模式等待。");
+            player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}對戰已經開始，無法中途加入！請在旁觀者模式等待");
             return HookResult.Handled; 
         }
 
@@ -248,7 +248,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             if (currentTeamCount >= Config.MaxPlayersPerTeam)
             {
                 string teamName = teamIndex == 2 ? "恐怖份子 (T)" : "反恐小組 (CT)";
-                player.PrintToChat($" {_cachedPrefix} {ChatColors.Red}加入失敗！{teamName} 已經滿員 (最多 {Config.MaxPlayersPerTeam} 人)。");
+                player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}加入失敗！{teamName} 已經滿員 (最多 {ChatColors.Lime}{Config.MaxPlayersPerTeam} {ChatColors.Orange}人)");
                 return HookResult.Handled; 
             }
         }

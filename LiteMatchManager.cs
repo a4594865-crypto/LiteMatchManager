@@ -397,11 +397,20 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     {
         var player = @event.Userid;
         if (player == null || !player.IsValid) return HookResult.Continue;
+        
+        // 【修改】不使用 Timer，改用雙重 NextFrame (等待 2 個引擎 Tick) 避開動畫衝突
         Server.NextFrame(() => {
-            if (player == null || !player.IsValid || player.PlayerPawn == null || !player.PlayerPawn.IsValid || !player.PawnIsAlive) return;
-            player.RemoveWeapons(); 
-            foreach (var item in Config.SpawnWeapons) { player.GiveNamedItem(item); }
+            Server.NextFrame(() => {
+                // 再次進行完整的安全檢查，確保這 2 幀過後玩家依然活著且有效
+                if (player == null || !player.IsValid || player.PlayerPawn == null || !player.PlayerPawn.IsValid || !player.PawnIsAlive) return;
+                
+                player.RemoveWeapons(); 
+                foreach (var item in Config.SpawnWeapons) { 
+                    player.GiveNamedItem(item); 
+                }
+            });
         });
+        
         return HookResult.Continue;
     }
 
@@ -440,7 +449,13 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 if ((isRequestingPistol && isCurrentPistol) || (!isRequestingPistol && !isCurrentPistol))
                 {
                     weapon.Remove();
-                    break; 
+                    // 【修改】不使用 Timer，利用下一個 Tick 發放新武器
+                    Server.NextFrame(() => {
+                        if (player.IsValid && player.PawnIsAlive) {
+                            player.GiveNamedItem(newWeapon);
+                        }
+                    });
+                    return; 
                 }
             }
         }

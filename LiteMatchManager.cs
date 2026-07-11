@@ -40,9 +40,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "6.8_GodTier_Flawless";
+    public override string ModuleVersion => "6.9_Ultimate_Edition";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "移除秒數延遲，改用 NextFrame 極速執行";
+    public override string ModuleDescription => "完美換槍系統 + 開賽鎖定隊伍 + 專業級日誌";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -56,6 +56,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
+
+    // 【新增】預先將手槍清單存入 Hash 表，查詢速度 O(1)
+    private static readonly HashSet<string> PistolNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "weapon_deagle", "weapon_usp_silencer", "weapon_glock", "weapon_revolver",
+        "weapon_p250", "weapon_cz75a", "weapon_tec9", "weapon_fiveseven", 
+        "weapon_elite", "weapon_hkp2000"
+    };
 
     public void OnConfigParsed(LiteMatchConfig config)
     {
@@ -73,11 +81,16 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
     public override void Load(bool hotReload)
     {
+        Console.WriteLine("=================================================");
+        Console.WriteLine("        LiteMatchManager 插件已成功初始化！      ");
+        Console.WriteLine("=================================================");
+
         AddCommandListener("say", OnPlayerSay);
         AddCommandListener("say_team", OnPlayerSay);
         AddCommandListener("jointeam", OnJoinTeam);
         AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
         
+        // 攔截丟槍
         AddCommandListener("drop", (player, info) => {
             return HookResult.Handled;
         });
@@ -138,14 +151,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             ResetMatchState();
             
-            // 【新增】在後台控制台印出專業級 Log
             Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
             
             Server.NextFrame(() => {
                 Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
             });
         });
-}
+    }
+
     private void CheckAndResetGameImmediate()
     {
         Server.NextFrame(() => {
@@ -193,17 +206,24 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         
         ResetMatchState();
         
-        // 【新增】在控制台留下專業紀錄，讓你確認對戰終止後的動作
         Console.WriteLine($"[LiteMatch] [AbortMatch] 對戰已終止！正在切換回暖身設定檔：{Config.WarmupConfigName}");
         
         Server.NextFrame(() => {
             Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
         });
     }
+
     private HookResult OnJoinTeam(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null || !player.IsValid) return HookResult.Continue;
         if (!int.TryParse(info.GetArg(1), out int teamIndex)) return HookResult.Continue;
+
+        // 【新增】防護罩：對戰中嚴格禁止中途加入
+        if (_isMatchLive && (teamIndex == 2 || teamIndex == 3))
+        {
+            player.PrintToChat($" {_cachedPrefix} {ChatColors.Red}對戰已經開始，無法中途加入！請在旁觀者模式等待。");
+            return HookResult.Handled;
+        }
 
         if (teamIndex == 2 || teamIndex == 3)
         {
@@ -347,7 +367,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _publicBroadcastTimer?.Kill();
             _publicBroadcastTimer = null;
             
-            // 【新增】在後台控制台印出專業級 Log
             Console.WriteLine($"[LiteMatch] [MatchLive] 雙方準備就緒！正式執行開賽設定檔：{Config.LiveConfigName}");
             
             Server.NextFrame(() => {
@@ -368,31 +387,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         return HookResult.Continue;
     }
 
-   private bool HandleWeaponCommand(CCSPlayerController player, string command)
-    {
-        if (!player.PawnIsAlive) return false;
-        
-        switch (command)
-        {
-            case "!dg": ReplaceWeapon(player, "weapon_deagle"); return true;
-            case "!usp": ReplaceWeapon(player, "weapon_usp_silencer"); return true;
-            case "!gk": ReplaceWeapon(player, "weapon_glock"); return true;
-            case "!r8": ReplaceWeapon(player, "weapon_revolver"); return true;
-            case "!ssg": ReplaceWeapon(player, "weapon_ssg08"); return true;
-            case "!awp": ReplaceWeapon(player, "weapon_awp"); return true;
-            case "!gs": OnGsCommand(player, null!); return true;
-        }
-        return false;
-    }
-
-   // 【新增】預先將手槍清單存入 Hash 表，查詢速度 O(1)，壓榨出極致效能
-    private static readonly HashSet<string> PistolNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "weapon_deagle", "weapon_usp_silencer", "weapon_glock", "weapon_revolver",
-        "weapon_p250", "weapon_cz75a", "weapon_tec9", "weapon_fiveseven", 
-        "weapon_elite", "weapon_hkp2000"
-    };
-
+    // 【新增】整合好的極速換槍邏輯
     private bool HandleWeaponCommand(CCSPlayerController player, string command)
     {
         if (!player.PawnIsAlive) return false;
@@ -410,16 +405,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         return false;
     }
 
-    // 【新增】專屬換槍系統：自動判斷並沒收佔用槽位的舊武器
+    // 【新增】自動判定沒收舊槍函數
     private void ReplaceWeapon(CCSPlayerController player, string newWeapon)
     {
         var pawn = player.PlayerPawn.Value;
         if (pawn == null || pawn.WeaponServices == null || pawn.WeaponServices.MyWeapons == null) return;
 
-        // 判斷玩家要求的是不是手槍
         bool isRequestingPistol = PistolNames.Contains(newWeapon);
 
-        // 掃描身上的裝備
         foreach (var weaponHandle in pawn.WeaponServices.MyWeapons)
         {
             var weapon = weaponHandle.Value;
@@ -428,12 +421,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 string wName = weapon.DesignerName;
                 if (string.IsNullOrEmpty(wName)) continue;
 
-                // 遇到刀子或 C4 直接跳過
                 if (wName.Contains("knife") || wName.Contains("bayonet") || wName.Contains("c4")) continue;
 
                 bool isCurrentPistol = PistolNames.Contains(wName);
 
-                // 命中對應槽位：刪除並立刻中斷迴圈 (break) 節省運算
                 if (isRequestingPistol && isCurrentPistol)
                 {
                     weapon.Remove();
@@ -446,8 +437,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 }
             }
         }
-
-        // 槽位清空，發放新槍
         player.GiveNamedItem(newWeapon);
     }
 

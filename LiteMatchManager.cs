@@ -248,7 +248,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             if (currentTeamCount >= Config.MaxPlayersPerTeam)
             {
                 string teamName = teamIndex == 2 ? "恐怖份子 (T)" : "反恐小組 (CT)";
-                player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}加入失敗！{teamName} 已經滿員 (最多 {ChatColors.Lime}{Config.MaxPlayersPerTeam} {ChatColors.Orange}人)");
+                player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}加 入 失 敗！{teamName} 已 經 滿 員 ( 最 多 {ChatColors.Green}{Config.MaxPlayersPerTeam}{ChatColors.Orange} 人 )");
                 return HookResult.Handled; 
             }
         }
@@ -546,43 +546,27 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         try 
         {
             _unreadyNamesCache.Clear();
-            int activeT = 0, activeCT = 0;
-            
-            // 1. 重新精準計算場上總人數
             foreach (var p in Utilities.GetPlayers())
             {
                 if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
                 {
-                    if (p.TeamNum == 2) activeT++;
-                    if (p.TeamNum == 3) activeCT++;
                     if (!_readyPlayers.Contains(p.SteamID)) _unreadyNamesCache.Add(p.PlayerName); 
                 }
             }
-            
-            int totalPlayers = activeT + activeCT;
-
-            // 【關鍵修復】如果場上有人，且 (有人沒準備 OR 總人數根本不足 2 人)，都要進行廣播
-            if (totalPlayers > 0 && (_unreadyNamesCache.Count > 0 || totalPlayers < 2)) 
+            if (_unreadyNamesCache.Count > 0) 
             {
+                // 取得動態人數
                 int targetPlayers = GetDynamicRequiredPlayers();
                 
-                // 【優化】把寫死的 2 人改成 {totalPlayers}，讓 1 個人時會正確顯示「目前場上 1 人」
-                string modeHint = targetPlayers == 2 
-                    ? $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}{totalPlayers} {ChatColors.White}人，雙 方 輸 入 {ChatColors.Orange}!R {ChatColors.White}即 可 直 接 {ChatColors.Green}1 v 1 單 挑{ChatColors.White}"
-                    : $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}{Config.MinPlayersToStart} {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}2 v 2 團戰{ChatColors.White}";
+                // 【新增】根據目標人數，動態決定要顯示哪一句提示
+               // 【修改】將提示文字改為明確告知「以人數判斷」
+               string modeHint = targetPlayers == 2 
+                    ? $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}2 {ChatColors.White}人，雙 方 輸 入 {ChatColors.Orange}!R {ChatColors.White}即 可 直 接 {ChatColors.Green}1 v 1 單 挑{ChatColors.White}"
+                    : $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}4 {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}2 v 2 團戰{ChatColors.White}";
                 
-                if (totalPlayers < 2)
-                {
-                    // 場上只有 1 人時的專屬廣播 (不會顯示空蕩蕩的尚未準備名單)
-                    Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}等 待 對 手 加 入 中... {ChatColors.Default}| 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
-                }
-                else
-                {
-                    // 正常 2 人以上，印出未準備名單
-                    Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
-                }
+                Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
                 
-                // 無論如何，最後都會完美印出你設計好的這行動態判斷文字
+                // 這裡只會跟著印出符合當下情況的那一行
                 Server.PrintToChatAll(modeHint); 
             }
         }

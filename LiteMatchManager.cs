@@ -51,6 +51,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private Dictionary<ulong, int> _playerUnreadyTime = new(64); 
     private List<string> _unreadyNamesCache = new(64); 
     
+    // 【新增】用來記憶每個玩家偏好的主副武器
+    private Dictionary<ulong, string> _playerPrimary = new(64);
+    private Dictionary<ulong, string> _playerSecondary = new(64);
+    
     private bool _isMatchLive = false;
     private bool _isChangingMap = false; 
     
@@ -107,6 +111,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     {
                         _readyPlayers.Remove(steamId);
                         _playerUnreadyTime.Remove(steamId);
+                        
+                        // 【新增】玩家離開時，把他的武器記憶刪除
+                        _playerPrimary.Remove(steamId);
+                        _playerSecondary.Remove(steamId);
+
                         if (_isMatchLive) CheckAndResetGameImmediate();
                     }
                 } 
@@ -398,6 +407,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         var player = @event.Userid;
         if (player == null || !player.IsValid) return HookResult.Continue;
         
+        ulong steamId = player.SteamID;
+        
         // 【修改】不使用 Timer，改用雙重 NextFrame (等待 2 個引擎 Tick) 避開動畫衝突
         Server.NextFrame(() => {
             Server.NextFrame(() => {
@@ -405,8 +416,24 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 if (player == null || !player.IsValid || player.PlayerPawn == null || !player.PlayerPawn.IsValid || !player.PawnIsAlive) return;
                 
                 player.RemoveWeapons(); 
-                foreach (var item in Config.SpawnWeapons) { 
-                    player.GiveNamedItem(item); 
+                
+                // 【修改】加入武器記憶讀取判斷
+                foreach (var item in Config.SpawnWeapons) 
+                { 
+                    string weaponToGive = item;
+
+                    // 判斷 1：如果設定檔這把槍是手槍，且玩家有自己偏好的手槍記憶
+                    if (PistolNames.Contains(item))
+                    {
+                        if (_playerSecondary.TryGetValue(steamId, out string? prefSec)) weaponToGive = prefSec;
+                    }
+                    // 判斷 2：如果設定檔這把槍是主武器 (非手槍、非刀)，且玩家有偏好的主武器記憶
+                    else if (item.StartsWith("weapon_") && !item.Contains("knife") && !item.Contains("bayonet"))
+                    {
+                        if (_playerPrimary.TryGetValue(steamId, out string? prefPri)) weaponToGive = prefPri;
+                    }
+
+                    player.GiveNamedItem(weaponToGive); 
                 }
             });
         });
@@ -417,14 +444,21 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private bool HandleWeaponCommand(CCSPlayerController player, string command)
     {
         if (!player.PawnIsAlive) return false;
+        ulong steamId = player.SteamID;
+        
+        // 【修改】換槍的同時，將玩家的選擇抄進筆記本裡
         switch (command)
         {
-            case "!dg": ReplaceWeapon(player, "weapon_deagle"); return true;
-            case "!usp": ReplaceWeapon(player, "weapon_usp_silencer"); return true;
-            case "!gk": ReplaceWeapon(player, "weapon_glock"); return true;
-            case "!r8": ReplaceWeapon(player, "weapon_revolver"); return true;
-            case "!ssg": ReplaceWeapon(player, "weapon_ssg08"); return true;
-            case "!awp": ReplaceWeapon(player, "weapon_awp"); return true;
+            // 手槍類：寫入副武器記憶
+            case "!dg": _playerSecondary[steamId] = "weapon_deagle"; ReplaceWeapon(player, "weapon_deagle"); return true;
+            case "!usp": _playerSecondary[steamId] = "weapon_usp_silencer"; ReplaceWeapon(player, "weapon_usp_silencer"); return true;
+            case "!gk": _playerSecondary[steamId] = "weapon_glock"; ReplaceWeapon(player, "weapon_glock"); return true;
+            case "!r8": _playerSecondary[steamId] = "weapon_revolver"; ReplaceWeapon(player, "weapon_revolver"); return true;
+            
+            // 狙擊類：寫入主武器記憶
+            case "!ssg": _playerPrimary[steamId] = "weapon_ssg08"; ReplaceWeapon(player, "weapon_ssg08"); return true;
+            case "!awp": _playerPrimary[steamId] = "weapon_awp"; ReplaceWeapon(player, "weapon_awp"); return true;
+            
             case "!gs": OnGsCommand(player, null!); return true;
         }
         return false;

@@ -465,8 +465,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             
             // 【新增】根據目標人數，動態決定要顯示哪一句提示
             string modeHint = targetPlayers == 2 
-                ? $" {_cachedPrefix} {ChatColors.White}雙方各 {ChatColors.Lime}1 {ChatColors.White}人{ChatColors.Gold}皆輸入 {ChatColors.Lime}!R {ChatColors.White}準備 = {ChatColors.Lime}1 v 1 單挑"
-                : $" {_cachedPrefix} {ChatColors.White}雙方各 {ChatColors.Lime}2 {ChatColors.White}人{ChatColors.Gold}皆輸入 {ChatColors.Lime}!R {ChatColors.White}準備 = {ChatColors.Lime}2 v 2 團戰";
+                ? $" {_cachedPrefix} {ChatColors.White}雙 方 各 {ChatColors.Lime}1 {ChatColors.White}人 皆 輸 入 {ChatColors.Lime}!R {ChatColors.White}準 備 = {ChatColors.Gold}1 v 1 單 挑"
+                : $" {_cachedPrefix} {ChatColors.White}雙 方 各 {ChatColors.Lime}2 {ChatColors.White}人 皆 輸 入 {ChatColors.Lime}!R {ChatColors.White}準 備 = {ChatColors.Gold}2 v 2 團 戰";
 
             foreach (var p in Utilities.GetPlayers())
             {
@@ -519,8 +519,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 
                 // 【新增】根據目標人數，動態決定要顯示哪一句提示
                 string modeHint = targetPlayers == 2 
-                    ? $" {_cachedPrefix} {ChatColors.White}雙方各 {ChatColors.Lime}1 {ChatColors.White}人{ChatColors.Gold}皆輸入 {ChatColors.Lime}!R {ChatColors.White}準備 = {ChatColors.Lime}1 v 1 單挑"
-                    : $" {_cachedPrefix} {ChatColors.White}雙方各 {ChatColors.Lime}2 {ChatColors.White}人{ChatColors.Gold}皆輸入 {ChatColors.Lime}!R {ChatColors.White}準備 = {ChatColors.Lime}2 v 2 團戰";
+                    ? $" {_cachedPrefix} {ChatColors.White}雙 方 各 {ChatColors.Lime}1 {ChatColors.White}人 皆 輸 入 {ChatColors.Lime}!R {ChatColors.White}準 備 = {ChatColors.Gold}1 v 1 單 挑"
+                    : $" {_cachedPrefix} {ChatColors.White}雙 方 各 {ChatColors.Lime}2 {ChatColors.White}人 皆 輸 入 {ChatColors.Lime}!R {ChatColors.White}準 備 = {ChatColors.Gold}2 v 2 團 戰";
                 
                 Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
                 

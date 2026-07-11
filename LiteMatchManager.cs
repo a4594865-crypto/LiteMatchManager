@@ -546,7 +546,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         // 觸發條件：場上有人，且「所有人」都已經輸入 !R 準備好
         if (totalPlayers > 0 && totalPlayers == _readyPlayers.Count)
         {
-            int targetPlayers = GetDynamicRequiredPlayers();
             string modeHint = "";
 
             if (totalPlayers == 1)
@@ -558,11 +557,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}{totalPlayers} {ChatColors.White}人，等 待 對 手 加 入 {ChatColors.Green}2 v 2 {ChatColors.White}團 戰";
             }
 
-            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}等 待 對 手 加 入 中... {ChatColors.Default}| 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
+            // 【修改】只印出這一行，畫面更乾淨
             Server.PrintToChatAll(modeHint);
         }
     }
-
     // 負責每 15 秒催促未準備玩家的廣播
     private void BroadcastUnreadyPlayers()
     {

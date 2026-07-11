@@ -380,7 +380,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _isMatchLive = true;
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
-            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}所 有 玩 家 已 準 備，{modeText} 比 賽 開 始！");
+            Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 家 已 準 備，{modeText} 比 賽 開 始");
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}３０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
             
             _privateCheckTimer?.Kill();
@@ -465,8 +465,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             
             // 【新增】根據目標人數，動態決定要顯示哪一句提示
      string modeHint = targetPlayers == 2 
-                    ? $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}2 {ChatColors.White}人，雙 方 輸 入 {ChatColors.Orange}!R {ChatColors.White}即 可 直 接 {ChatColors.Green}1v1 單 挑{ChatColors.White}"
-                    : $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}4 {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}2v2 團戰{ChatColors.White}";
+                    ? $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}2 {ChatColors.White}人，雙 方 輸 入 {ChatColors.Orange}!R {ChatColors.White}即 可 直 接 {ChatColors.Green}1 v 1 單 挑{ChatColors.White}"
+                    : $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}4 {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}2 v 2 團戰{ChatColors.White}";
 
             foreach (var p in Utilities.GetPlayers())
             {
@@ -520,8 +520,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 // 【新增】根據目標人數，動態決定要顯示哪一句提示
                // 【修改】將提示文字改為明確告知「以人數判斷」
                string modeHint = targetPlayers == 2 
-                    ? $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}2 {ChatColors.White}人，雙 方 輸 入 {ChatColors.Orange}!R {ChatColors.White}即 可 直 接 {ChatColors.Green}1v1 單 挑{ChatColors.White}"
-                    : $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}4 {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}2v2 團戰{ChatColors.White}";
+                    ? $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}2 {ChatColors.White}人，雙 方 輸 入 {ChatColors.Orange}!R {ChatColors.White}即 可 直 接 {ChatColors.Green}1 v 1 單 挑{ChatColors.White}"
+                    : $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}4 {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}2 v 2 團戰{ChatColors.White}";
                 
                 Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
                 

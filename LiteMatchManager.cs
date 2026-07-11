@@ -139,7 +139,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         if (_readyPlayers.Contains(steamId))
                         {
                             _readyPlayers.Remove(steamId);
-                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 消 他 的 準 備");
+                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 取 消 他 的 準 備");
                         }
                         _playerUnreadyTime.Remove(steamId); 
                     }
@@ -540,38 +540,57 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         } 
         catch (Exception) { }
     }
-   private void BroadcastUnreadyPlayers()
+
+    private void BroadcastUnreadyPlayers()
     {
         if (_isMatchLive) return; 
         try 
         {
             _unreadyNamesCache.Clear();
+            int totalPlayers = 0; // 【新增】加入算人頭的功能
+            
             foreach (var p in Utilities.GetPlayers())
             {
                 if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
                 {
+                    totalPlayers++; // 【新增】累加場上總人數
                     if (!_readyPlayers.Contains(p.SteamID)) _unreadyNamesCache.Add(p.PlayerName); 
                 }
             }
-            if (_unreadyNamesCache.Count > 0) 
+            
+            // 【修改】條件加上 totalPlayers == 1，確保 1 個人在場時也能印出文字
+            if (_unreadyNamesCache.Count > 0 || totalPlayers == 1) 
             {
-                // 取得動態人數
                 int targetPlayers = GetDynamicRequiredPlayers();
                 
-                // 【新增】根據目標人數，動態決定要顯示哪一句提示
-               // 【修改】將提示文字改為明確告知「以人數判斷」
-               string modeHint = targetPlayers == 2 
-                    ? $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}2 {ChatColors.White}人，雙 方 輸 入 {ChatColors.Orange}!R {ChatColors.White}即 可 直 接 {ChatColors.Green}1 v 1 單 挑{ChatColors.White}"
-                    : $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}4 {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}2 v 2 團戰{ChatColors.White}";
+                // 【修改】透過簡單的 if-else 將你的文字填進去
+                string modeHint = "";
+                if (totalPlayers <= 1)
+                {
+                    modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}1 {ChatColors.White}人，等 待 對 方 加 入 ";
+                }
+                else if (targetPlayers == 2)
+                {
+                    modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}2 {ChatColors.White}人，雙 方 輸 入 {ChatColors.Orange}!R {ChatColors.White}即 可 直 接 {ChatColors.Green}1 v 1 單 挑{ChatColors.White}";
+                }
+                else
+                {
+                    modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}{Config.MinPlayersToStart} {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}2 v 2 團戰{ChatColors.White}";
+                }
                 
-                Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
+                // 只有真的有人沒準備時，才印出點名名單 (避免 1 個人已準備卻被點名)
+                if (_unreadyNamesCache.Count > 0)
+                {
+                    Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
+                }
                 
-                // 這裡只會跟著印出符合當下情況的那一行
+                // 無論如何，都會跟著印出判斷好的動態文字
                 Server.PrintToChatAll(modeHint); 
             }
         }
         catch (Exception) { }
     }
+
     private void ResetMatchState()
     {
         _isMatchLive = false;

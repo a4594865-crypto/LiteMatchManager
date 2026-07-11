@@ -567,7 +567,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 string modeHint = "";
                 if (totalPlayers <= 1)
                 {
-                    modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}1 {ChatColors.White}人，等 待 玩 家 加 入 ChatColors.Orange}1 v 1 單 挑 ChatColors.White}或 ChatColors.Orange}2 v 2 團 戰";
+                    modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}1 {ChatColors.White}人，等 待 對 手 加 入{ChatColors.Orange}1 v 1 {ChatColors.White}或 {ChatColors.Orange}2 v 2 {ChatColors.White}對 戰";
                 }
                 else if (targetPlayers == 2)
                 {

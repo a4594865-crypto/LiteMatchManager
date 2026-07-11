@@ -588,25 +588,27 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 int targetPlayers = GetDynamicRequiredPlayers();
                 string modeHint = "";
 
-                if (totalPlayers <= 1)
-                {
-                    modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}1 {ChatColors.White}人，請 輸 入 {ChatColors.Orange}!R {ChatColors.White}準 備";
-                }
-                else if (targetPlayers == 2)
+                // 【修改】直接從 2 個人開始判斷，1 個人的動態判斷不顯示
+                if (totalPlayers == 2)
                 {
                     modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}2 {ChatColors.White}人，雙 方 輸 入 {ChatColors.Orange}!R {ChatColors.White}即 可 直 接 {ChatColors.Green}1 v 1 單 挑{ChatColors.White}";
                 }
-                else
+                else if (totalPlayers > 2)
                 {
                     modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}{Config.MinPlayersToStart} {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}2 v 2 團戰{ChatColors.White}";
                 }
                 
+                // 優先印出尚未準備的點名清單
                 if (_unreadyNamesCache.Count > 0)
                 {
                     Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
                 }
                 
-                Server.PrintToChatAll(modeHint); 
+                // 【新增】如果 modeHint 裡面有字（也就是 2 人以上），才印出這行，避免單人時印出空白行
+                if (!string.IsNullOrEmpty(modeHint))
+                {
+                    Server.PrintToChatAll(modeHint); 
+                }
             }
         }
         catch (Exception) { }

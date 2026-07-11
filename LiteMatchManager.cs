@@ -42,9 +42,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "7.3_Timer_Fixed";
+    public override string ModuleVersion => "7.4_Strict_Locking";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "全動態開賽 + 計時器精準重置校準";
+    public override string ModuleDescription => "全動態開賽 + 1v1強硬鎖位防偷渡";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -58,6 +58,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     
     private bool _isMatchLive = false;
     private bool _isChangingMap = false; 
+    
+    // 【新增】記錄目前正在進行的是 1v1(2人) 還是 2v2(4人)，用來做精準的人數限制
+    private int _liveMatchTargetPlayers = 0; 
     
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
@@ -87,7 +90,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v7.3 (計時器修復版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v7.4 (終極防偷渡版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -129,6 +132,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             return HookResult.Continue;
         });
 
+        // 【關鍵修改】用來防堵 CS2 引擎「自動分配隊伍」偷渡進場的最終防線
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
             var player = @event.Userid;
@@ -148,16 +152,54 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         }
                         _playerUnreadyTime.Remove(steamId); 
                     }
-                    
                     CheckMatchStart(); 
                 }
                 else
                 {
+                    // 比賽進行中！檢查玩家是否靠「自動分配」偷偷加入了 T(2) 或 CT(3)
+                    if (newTeam == 2 || newTeam == 3)
+                    {
+                        if (_liveMatchTargetPlayers == 2 && !_readyPlayers.Contains(steamId))
+                        {
+                            // 1v1 局：絕對不允許新玩家加入！瞬間強制拉回觀戰！(使用 NextFrame 確保引擎不崩潰)
+                            Server.NextFrame(() => {
+                                if (player.IsValid) {
+                                    player.ChangeTeam(CsTeam.Spectator);
+                                    player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}1 v 1 單 挑 已 開 始，無 法 中 途 加 入！已 移 至 觀 戰。");
+                                }
+                            });
+                        }
+                        else if (_liveMatchTargetPlayers > 2 && !_readyPlayers.Contains(steamId))
+                        {
+                            // 2v2 局：允許替補加入，但要確保該隊伍沒有滿員 (GetPlayers 非常輕量，不會引發延遲)
+                            int currentCount = 0;
+                            foreach (var p in Utilities.GetPlayers())
+                            {
+                                if (p != null && p.IsValid && !p.IsBot && p.TeamNum == newTeam && p.SteamID != steamId)
+                                    currentCount++;
+                            }
+                            
+                            if (currentCount >= Config.MaxPlayersPerTeam)
+                            {
+                                Server.NextFrame(() => {
+                                    if (player.IsValid) {
+                                        player.ChangeTeam(CsTeam.Spectator);
+                                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}該 隊 伍 已 滿 員，已 移 至 觀 戰。");
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                // 替補成功加入，把他加進準備名單中一起追蹤
+                                _readyPlayers.Add(steamId);
+                            }
+                        }
+                    }
                     CheckAndResetGameImmediate();
                 }
             }
             return HookResult.Continue;
-        });
+        }, HookMode.Post);
 
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
         RegisterEventHandler<EventCsWinPanelMatch>(OnMatchEnd);
@@ -229,14 +271,37 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         if (player == null || !player.IsValid) return HookResult.Continue;
         if (!int.TryParse(info.GetArg(1), out int teamIndex)) return HookResult.Continue;
 
-        if (_isMatchLive && (teamIndex == 2 || teamIndex == 3))
-        {
-            player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}對戰已經開始，無法中途加入！請在旁觀者模式等待");
-            return HookResult.Handled; 
-        }
-
         if (teamIndex == 2 || teamIndex == 3)
         {
+            // 【關鍵修改】嚴格區分 1v1 和 2v2 的 UI 手動加入限制
+            if (_isMatchLive)
+            {
+                if (_liveMatchTargetPlayers == 2)
+                {
+                    // 1v1 局：非參賽者無法加入，參賽者無法切換隊伍
+                    if (!_readyPlayers.Contains(player.SteamID))
+                    {
+                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}1 v 1 單 挑 已 經 開 始，無 法 中 途 加 入！請 觀 戰");
+                        return HookResult.Handled;
+                    }
+                    else
+                    {
+                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}對 戰 進 行 中，無 法 切 換 隊 伍！");
+                        return HookResult.Handled;
+                    }
+                }
+                else
+                {
+                    // 2v2 局：允許替補加入，但已經在場上的玩家禁止切換隊伍
+                    if (_readyPlayers.Contains(player.SteamID) && player.TeamNum >= 2)
+                    {
+                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}對 戰 進 行 中，無 法 切 換 隊 伍！");
+                        return HookResult.Handled;
+                    }
+                }
+            }
+
+            // 暖身階段 或 2v2替補加入 時的滿員檢查
             int currentTeamCount = 0;
             foreach (var p in Utilities.GetPlayers())
             {
@@ -345,7 +410,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         
         CheckMatchStart();
 
-        // 【關鍵修復】如果打完 !R 之後，發現人數不足無法開賽，且所有人都已經準備好
         if (!_isMatchLive)
         {
             int activePlayers = 0;
@@ -359,11 +423,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
             if (activePlayers > 0 && activePlayers == _readyPlayers.Count)
             {
-                // 1. 立刻推播一次等待訊息給玩家看，讓他知道現在是等待狀態
                 BroadcastWaitingMessage();
                 
-                // 2. 殺死舊的計時器，並重新啟動全新的 30 秒計時器！
-                // 確保下一次廣播絕對是精準的 30 秒後，不再會有 1~2 秒就跑出來的問題！
                 _waitingTimer?.Kill();
                 _waitingTimer = AddTimer(Config.WaitingForOpponentInterval, BroadcastWaitingMessage, TimerFlags.REPEAT);
             }
@@ -404,6 +465,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         if (_readyPlayers.Count >= totalPlayers && totalPlayers > 0)
         {
             _isMatchLive = true;
+            // 【新增】死死記住這場是 1v1 還是 2v2，供防偷渡機制使用
+            _liveMatchTargetPlayers = totalPlayers; 
+            
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
             Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 家 已 準 備，{modeText} 比 賽 開 始");
@@ -570,11 +634,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
             if (totalPlayers == 1)
             {
-                modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}1 {ChatColors.White}人，等 待 對 手 加 入 {ChatColors.Green}1 v 1 {ChatColors.White}或 {ChatColors.Green}2 v 2 {ChatColors.White}對 戰";
+                modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}場 上 {ChatColors.Green}1 {ChatColors.White}人，等 對 手 加 入 {ChatColors.Green}1 v 1 {ChatColors.White}或 {ChatColors.Green}2 v 2 {ChatColors.White}對 戰";
             }
             else
             {
-                modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}{totalPlayers} {ChatColors.White}人，等 待 對 手 加 入 {ChatColors.Green}2 v 2 {ChatColors.White}團 戰";
+                modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}場 上 {ChatColors.Green}{totalPlayers} {ChatColors.White}人，等 對 手 加 入 {ChatColors.Green}2 v 2 {ChatColors.White}團 戰";
             }
 
             Server.PrintToChatAll(modeHint);
@@ -632,6 +696,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     {
         _isMatchLive = false;
         _isChangingMap = false;
+        _liveMatchTargetPlayers = 0; // 【新增】換圖或重置時，清除記憶
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
         

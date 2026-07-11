@@ -460,6 +460,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         if (_isMatchLive) return; 
         try 
         {
+            // 【新增】先取得動態人數
+            int targetPlayers = GetDynamicRequiredPlayers(); 
+            
+            // 【新增】根據目標人數，動態決定要顯示哪一句提示
+            string modeHint = targetPlayers == 2 
+                ? $" {_cachedPrefix} {ChatColors.White}雙方各 {ChatColors.Lime}1 {ChatColors.White}人{ChatColors.Gold}皆輸入 {ChatColors.Lime}!R {ChatColors.White}準備 = {ChatColors.Lime}1 v 1 單挑"
+                : $" {_cachedPrefix} {ChatColors.White}雙方各 {ChatColors.Lime}2 {ChatColors.White}人{ChatColors.Gold}皆輸入 {ChatColors.Lime}!R {ChatColors.White}準備 = {ChatColors.Lime}2 v 2 團戰";
+
             foreach (var p in Utilities.GetPlayers())
             {
                 if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
@@ -481,6 +489,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         {
                             int timeLeft = Config.KickUnreadyPlayerTime - _playerUnreadyTime[steamId];
                             p.PrintToChat($" {_cachedPrefix} 請輸入 {ChatColors.Lime}!R{ChatColors.White} 準備 ，{ChatColors.Lime}{timeLeft}{ChatColors.White} 秒未準備將被踢出");
+                            
+                            // 這裡只會印出符合當下情況的那一行
+                            p.PrintToChat(modeHint); 
                         }
                     }
                 }
@@ -488,8 +499,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         } 
         catch (Exception) { }
     }
-
-    private void BroadcastUnreadyPlayers()
+   private void BroadcastUnreadyPlayers()
     {
         if (_isMatchLive) return; 
         try 
@@ -504,14 +514,22 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             }
             if (_unreadyNamesCache.Count > 0) 
             {
-                // 廣播顯示動態人數
+                // 取得動態人數
                 int targetPlayers = GetDynamicRequiredPlayers();
+                
+                // 【新增】根據目標人數，動態決定要顯示哪一句提示
+                string modeHint = targetPlayers == 2 
+                    ? $" {_cachedPrefix} {ChatColors.White}雙方各 {ChatColors.Lime}1 {ChatColors.White}人{ChatColors.Gold}皆輸入 {ChatColors.Lime}!R {ChatColors.White}準備 = {ChatColors.Lime}1 v 1 單挑"
+                    : $" {_cachedPrefix} {ChatColors.White}雙方各 {ChatColors.Lime}2 {ChatColors.White}人{ChatColors.Gold}皆輸入 {ChatColors.Lime}!R {ChatColors.White}準備 = {ChatColors.Lime}2 v 2 團戰";
+                
                 Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
+                
+                // 這裡只會跟著印出符合當下情況的那一行
+                Server.PrintToChatAll(modeHint); 
             }
         }
         catch (Exception) { }
     }
-
     private void ResetMatchState()
     {
         _isMatchLive = false;

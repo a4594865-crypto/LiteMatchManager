@@ -518,9 +518,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 int targetPlayers = GetDynamicRequiredPlayers();
                 
                 // 【新增】根據目標人數，動態決定要顯示哪一句提示
+               // 【修改】將提示文字改為明確告知「以人數判斷」
                 string modeHint = targetPlayers == 2 
-                    ? $" {_cachedPrefix} {ChatColors.White}雙 方 各 {ChatColors.Lime}1 {ChatColors.White}人 皆 輸 入 {ChatColors.Lime}!R {ChatColors.White}準 備 = {ChatColors.Gold}1 v 1 單 挑"
-                    : $" {_cachedPrefix} {ChatColors.White}雙 方 各 {ChatColors.Lime}2 {ChatColors.White}人 皆 輸 入 {ChatColors.Lime}!R {ChatColors.White}準 備 = {ChatColors.Gold}2 v 2 團 戰";
+                    ? $" {_cachedPrefix} {ChatColors.LightBlue}[動態判斷] {ChatColors.White}目前場上 {ChatColors.Lime}2 {ChatColors.White}人，雙方輸入 {ChatColors.Lime}!R {ChatColors.White}即可直接 {ChatColors.Orange}1v1 單挑{ChatColors.White}！"
+                    : $" {_cachedPrefix} {ChatColors.LightBlue}[動態判斷] {ChatColors.White}目前觸發團戰，需滿 {ChatColors.Lime}4 {ChatColors.White}人輸入 {ChatColors.Lime}!R {ChatColors.White}才可開始 {ChatColors.Orange}2v2 團戰{ChatColors.White}！";
                 
                 Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
                 

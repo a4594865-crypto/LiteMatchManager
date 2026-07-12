@@ -25,11 +25,12 @@ public class LiteMatchConfig : BasePluginConfig
     
     [JsonPropertyName("WaitingForOpponentInterval")] public int WaitingForOpponentInterval { get; set; } = 30;
 
-    [JsonPropertyName("ChatPrefix")] public string ChatPrefix { get; set; } = "[ {Green}2 v 2 對 戰 模 式{White} ]";
+    [JsonPropertyName("ChatPrefix")] public string ChatPrefix { get; set; } = "[ {Green}2 v 2 狙 擊 模 式{White} ]";
     [JsonPropertyName("EnableChatWeaponCommands")] public bool EnableChatWeaponCommands { get; set; } = true;
     
+    // 【修改】預設出生只給小刀、全甲、AWP
     [JsonPropertyName("SpawnWeapons")] 
-    public List<string> SpawnWeapons { get; set; } = ["weapon_knife", "item_assaultsuit", "weapon_deagle", "weapon_awp"];
+    public List<string> SpawnWeapons { get; set; } = ["weapon_knife", "item_assaultsuit", "weapon_awp"];
     
     [JsonPropertyName("WarmupConfigName")] public string WarmupConfigName { get; set; } = "warmup.cfg";
     [JsonPropertyName("LiveConfigName")] public string LiveConfigName { get; set; } = "live.cfg";
@@ -42,9 +43,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "7.7_Absolute_Perfection";
+    public override string ModuleVersion => "8.0_Sniper_PK_Only";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "全動態開賽 + 終極防護 + 狀態機漏洞修復";
+    public override string ModuleDescription => "純狙擊PK模式 + 全動態開賽 + 終極防護";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -53,8 +54,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private Dictionary<ulong, int> _playerUnreadyTime = new(64); 
     private List<string> _unreadyNamesCache = new(64); 
     
+    // 【優化】只保留主武器(狙擊槍)的偏好記錄，徹底移除副武器字典
     private Dictionary<ulong, string> _playerPrimary = new(64);
-    private Dictionary<ulong, string> _playerSecondary = new(64);
     
     private bool _isMatchLive = false;
     private bool _isChangingMap = false; 
@@ -63,13 +64,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
-
-    private static readonly HashSet<string> PistolNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "weapon_deagle", "weapon_usp_silencer", "weapon_glock", "weapon_revolver",
-        "weapon_p250", "weapon_cz75a", "weapon_tec9", "weapon_fiveseven", 
-        "weapon_elite", "weapon_hkp2000"
-    };
 
     public void OnConfigParsed(LiteMatchConfig config)
     {
@@ -88,7 +82,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v7.7 (絕對完美版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v8.0 (純狙擊PK版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -113,7 +107,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         _readyPlayers.Remove(steamId);
                         _playerUnreadyTime.Remove(steamId);
                         _playerPrimary.Remove(steamId);
-                        _playerSecondary.Remove(steamId);
 
                         if (_isMatchLive) 
                         {
@@ -132,7 +125,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             return HookResult.Continue;
         });
 
-        // 【終極修復核心】最嚴謹的隊伍變更狀態機
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
             var player = @event.Userid;
@@ -141,7 +133,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 ulong steamId = player.SteamID;
                 int newTeam = @event.Team; 
                 
-                // 1. 無論比賽是否開始，只要跳觀戰或未分配 (Team 0, 1)，一律徹底拔除參賽資格
                 if (newTeam == 0 || newTeam == 1) 
                 {
                     if (_readyPlayers.Contains(steamId))
@@ -155,22 +146,18 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     _playerUnreadyTime.Remove(steamId); 
                 }
 
-                // 2. 依照當前比賽狀態進行後續邏輯處理
                 if (!_isMatchLive)
                 {
-                    // 暖身階段：延遲一幀，等待引擎將玩家陣營確實轉換完畢後，精準計算是否可開賽
                     Server.NextFrame(() => {
                         CheckMatchStart(); 
                     });
                 }
                 else
                 {
-                    // 比賽階段：有人嘗試加入 T(2) 或 CT(3)
                     if (newTeam == 2 || newTeam == 3)
                     {
                         if (_liveMatchTargetPlayers == 2 && !_readyPlayers.Contains(steamId))
                         {
-                            // 1v1 局：非參賽者絕對不准加入，強制踢回觀戰
                             Server.NextFrame(() => {
                                 if (player.IsValid) {
                                     player.ChangeTeam(CsTeam.Spectator);
@@ -180,7 +167,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         }
                         else if (_liveMatchTargetPlayers > 2 && !_readyPlayers.Contains(steamId))
                         {
-                            // 2v2 局：允許替補，檢查人數是否已滿 (極度輕量迴圈)
                             int currentCount = 0;
                             foreach (var p in Utilities.GetPlayers())
                             {
@@ -199,13 +185,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                             }
                             else
                             {
-                                // 替補合法加入，重新賦予參賽資格保護
                                 _readyPlayers.Add(steamId);
                             }
                         }
                     }
                     
-                    // 檢查是否有人離開(跳觀戰/斷線)導致人數不足而需要中斷比賽
                     CheckAndResetGameImmediate();
                 }
             }
@@ -498,7 +482,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         
         ulong steamId = player.SteamID;
 
-        // 【二次防護】玩家重生時，如果比賽中且身分不合法，沒收發槍並踢回觀戰
         if (_isMatchLive && (player.TeamNum == 2 || player.TeamNum == 3))
         {
             if (!_readyPlayers.Contains(steamId))
@@ -523,11 +506,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 { 
                     string weaponToGive = item;
 
-                    if (PistolNames.Contains(item))
-                    {
-                        if (_playerSecondary.TryGetValue(steamId, out string? prefSec)) weaponToGive = prefSec;
-                    }
-                    else if (item.StartsWith("weapon_") && !item.Contains("knife") && !item.Contains("bayonet"))
+                    // 【優化】只檢查是否為主武器替換 (移除了副武器的邏輯判斷)
+                    if (item.StartsWith("weapon_") && !item.Contains("knife") && !item.Contains("bayonet"))
                     {
                         if (_playerPrimary.TryGetValue(steamId, out string? prefPri)) weaponToGive = prefPri;
                     }
@@ -545,13 +525,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         if (!player.PawnIsAlive) return false;
         ulong steamId = player.SteamID;
         
+        // 【移除】完全拔除手槍相關的換槍指令
         switch (command)
         {
-            case "!dg": _playerSecondary[steamId] = "weapon_deagle"; ReplaceWeapon(player, "weapon_deagle"); return true;
-            case "!usp": _playerSecondary[steamId] = "weapon_usp_silencer"; ReplaceWeapon(player, "weapon_usp_silencer"); return true;
-            case "!gk": _playerSecondary[steamId] = "weapon_glock"; ReplaceWeapon(player, "weapon_glock"); return true;
-            case "!r8": _playerSecondary[steamId] = "weapon_revolver"; ReplaceWeapon(player, "weapon_revolver"); return true;
-            
             case "!ssg": _playerPrimary[steamId] = "weapon_ssg08"; ReplaceWeapon(player, "weapon_ssg08"); return true;
             case "!awp": _playerPrimary[steamId] = "weapon_awp"; ReplaceWeapon(player, "weapon_awp"); return true;
             
@@ -564,7 +540,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     {
         var pawn = player.PlayerPawn.Value;
         if (pawn == null || pawn.WeaponServices == null || pawn.WeaponServices.MyWeapons == null) return;
-        bool isRequestingPistol = PistolNames.Contains(newWeapon);
 
         foreach (var weaponHandle in pawn.WeaponServices.MyWeapons)
         {
@@ -575,17 +550,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 if (string.IsNullOrEmpty(wName)) continue;
                 if (wName.Contains("knife") || wName.Contains("bayonet") || wName.Contains("c4")) continue;
 
-                bool isCurrentPistol = PistolNames.Contains(wName);
-                if ((isRequestingPistol && isCurrentPistol) || (!isRequestingPistol && !isCurrentPistol))
-                {
-                    weapon.Remove();
-                    Server.NextFrame(() => {
-                        if (player.IsValid && player.PawnIsAlive) {
-                            player.GiveNamedItem(newWeapon);
-                        }
-                    });
-                    return; 
-                }
+                // 【優化】因為只有主武器，直接移除身上現有的槍並替換，不需再做複雜的類別比對
+                weapon.Remove();
+                Server.NextFrame(() => {
+                    if (player.IsValid && player.PawnIsAlive) {
+                        player.GiveNamedItem(newWeapon);
+                    }
+                });
+                return; 
             }
         }
         player.GiveNamedItem(newWeapon);
@@ -594,9 +566,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
     {
         if (player is null || !player.IsValid) return;
-        player.PrintToChat($" {ChatColors.Orange}您 可 在 聊 天 欄 位 輸 入 您 要 的 武 器，以 下 是 常 用 武 器");
-        player.PrintToChat($" [ {ChatColors.LightBlue}手槍{ChatColors.White} ]  {ChatColors.LightBlue}!dg {ChatColors.White}[ 沙鷹 ] 、{ChatColors.LightBlue}!usp {ChatColors.White}[ USP ] 、{ChatColors.LightBlue}!gk {ChatColors.White}[ 格洛克 ] 、{ChatColors.LightBlue}!r8 {ChatColors.White}[ R8 ]");
-        player.PrintToChat($" [ {ChatColors.Orange}狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ] 、{ChatColors.Orange}!awp {ChatColors.White}[ AWP狙擊步槍 ]");
+        // 【修改】更新武器選單說明，強調已禁用小槍
+        player.PrintToChat($" {ChatColors.Orange}【 純 狙 擊 P K 模 式 】已 禁 用 所 有 小 槍 ！");
+        player.PrintToChat($" [ {ChatColors.Orange}更換狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ] 、{ChatColors.Orange}!awp {ChatColors.White}[ AWP狙擊步槍 ]");
     }
 
     private void CheckAndWarnUnreadyPlayers()

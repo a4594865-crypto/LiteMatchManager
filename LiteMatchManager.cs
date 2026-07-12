@@ -460,7 +460,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
-            Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 傢 已 準 備，{modeText} 比 賽 開 始");
+            Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 家 已 準 備，{modeText} 比 賽 開 始");
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}２０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
             
             _privateCheckTimer?.Kill();
@@ -567,7 +567,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     {
         if (player is null || !player.IsValid) return;
         // 【修改】更新武器選單說明，強調已禁用小槍
-        player.PrintToChat($" {ChatColors.Orange}【 純 狙 擊 P K 模 式 】已 禁 用 所 有 小 槍 ！");
+        player.PrintToChat($" {ChatColors.Orange}【 純 狙 擊 P K 模 式 】已 禁 用 所 有 小 槍 、聊 天 欄 位 輸 入 您 要 的 武 器");
         player.PrintToChat($" [ {ChatColors.Orange}更換狙擊{ChatColors.White} ] {ChatColors.Orange}!ssg {ChatColors.White}[ SSG 08 鳥狙 ] 、{ChatColors.Orange}!awp {ChatColors.White}[ AWP狙擊步槍 ]");
     }
 

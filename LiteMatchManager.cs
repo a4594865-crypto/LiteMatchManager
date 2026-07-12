@@ -42,9 +42,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "7.7_Absolute_Perfection";
+    public override string ModuleVersion => "7.8_Absolute_Perfection_NoRagdolls";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "全動態開賽 + 終極防護 + 狀態機漏洞修復";
+    public override string ModuleDescription => "全動態開賽 + 終極防護 + 狀態機漏洞修復 + 秒清屍體";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -88,7 +88,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v7.7 (絕對完美版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v7.8 (完美無屍體版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -213,6 +213,24 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }, HookMode.Post);
 
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
+
+        // 【新增】玩家死亡瞬間，立刻強制清除屍體 (Ragdoll)，絕不卡頓
+        RegisterEventHandler<EventPlayerDeath>((@event, info) =>
+        {
+            Server.NextFrame(() =>
+            {
+                var ragdolls = Utilities.FindAllEntitiesByDesignerName<CBaseEntity>("cs_ragdoll");
+                foreach (var ragdoll in ragdolls)
+                {
+                    if (ragdoll != null && ragdoll.IsValid)
+                    {
+                        ragdoll.Remove(); 
+                    }
+                }
+            });
+            return HookResult.Continue;
+        });
+
         RegisterEventHandler<EventCsWinPanelMatch>(OnMatchEnd);
 
         RegisterListener<Listeners.OnMapStart>(mapName => 

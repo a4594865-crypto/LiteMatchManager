@@ -150,7 +150,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         if (!_isMatchLive)
                             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 消 準 備");
                         else
-                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 退 出 了 戰 鬥 (移 至 觀 戰)");
+                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 退 出 了 戰 鬥 ( 移 至 觀 戰 )");
                     }
                     _playerUnreadyTime.Remove(steamId); 
                 }
@@ -295,7 +295,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     }
                     else
                     {
-                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}對 戰 進 行 中，無 法 切 換 隊 伍！");
+                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}對 戰 進 行 中，無 法 切 換 隊 伍");
                         return HookResult.Handled;
                     }
                 }
@@ -303,7 +303,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 {
                     if (_readyPlayers.Contains(player.SteamID) && player.TeamNum >= 2)
                     {
-                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}對 戰 進 行 中，無 法 切 換 隊 伍！");
+                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}對 戰 進 行 中，無 法 切 換 隊 伍");
                         return HookResult.Handled;
                     }
                 }
@@ -476,8 +476,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
-            Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 傢 已 準 備，{modeText} 比 賽 開 始");
-            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}２４{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
+            Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 家 已 準 備，{modeText} 比 賽 開 始");
+            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}２０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
             
             _privateCheckTimer?.Kill();
             _privateCheckTimer = null;
@@ -742,12 +742,12 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             if (team.TeamNum == 3) scoreCT = team.Score;
         }
 
-        string winnerName = scoreT > scoreCT ? "恐怖份子 (T)" : "反恐小組 (CT)";
-        string loserName = scoreT > scoreCT ? "反恐小組 (CT)" : "恐怖份子 (T)";
+        string winnerName = scoreT > scoreCT ? "恐怖份子 (T)"："反恐小組 (CT)";
+        string loserName = scoreT > scoreCT ? "反恐小組 (CT)"："恐怖份子 (T)";
         
         int winnerScore = Math.Max(scoreT, scoreCT);
         int loserScore = Math.Min(scoreT, scoreCT);
-        string scoreString = $"{winnerScore} : {loserScore}";
+        string scoreString = $"{winnerScore}：{loserScore}";
 
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Lime}{winnerName} {ChatColors.Gold}以 {ChatColors.Green}({scoreString}) {ChatColors.Gold}的分數贏過 {ChatColors.Lime}{loserName}");
 

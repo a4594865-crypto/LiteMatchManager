@@ -42,9 +42,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "7.9_Ultimate_Clean";
+    public override string ModuleVersion => "7.7_Absolute_Perfection";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "全動態開賽 + 防偷渡防幽靈 + 雙重幀超渡屍體";
+    public override string ModuleDescription => "全動態開賽 + 終極防護 + 狀態機漏洞修復";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -88,7 +88,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v7.9 (雙重幀超渡版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v7.7 (絕對完美版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -100,11 +100,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             return HookResult.Handled;
         });
         
-        // 【新增】玩家斷線時，清理可能掉落的屍體
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
-            ClearAllRagdolls();
-            
             var player = @event.Userid;
             if (player != null)
             {
@@ -135,17 +132,16 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             return HookResult.Continue;
         });
 
-        // 【新增】玩家變更隊伍(包含跳觀戰)時，清理可能掉落的屍體
+        // 【終極修復核心】最嚴謹的隊伍變更狀態機
         RegisterEventHandler<EventPlayerTeam>((@event, info) =>
         {
-            ClearAllRagdolls();
-            
             var player = @event.Userid;
             if (player != null && player.IsValid && player.Handle != IntPtr.Zero)
             {
                 ulong steamId = player.SteamID;
                 int newTeam = @event.Team; 
                 
+                // 1. 無論比賽是否開始，只要跳觀戰或未分配 (Team 0, 1)，一律徹底拔除參賽資格
                 if (newTeam == 0 || newTeam == 1) 
                 {
                     if (_readyPlayers.Contains(steamId))
@@ -159,18 +155,22 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     _playerUnreadyTime.Remove(steamId); 
                 }
 
+                // 2. 依照當前比賽狀態進行後續邏輯處理
                 if (!_isMatchLive)
                 {
+                    // 暖身階段：延遲一幀，等待引擎將玩家陣營確實轉換完畢後，精準計算是否可開賽
                     Server.NextFrame(() => {
                         CheckMatchStart(); 
                     });
                 }
                 else
                 {
+                    // 比賽階段：有人嘗試加入 T(2) 或 CT(3)
                     if (newTeam == 2 || newTeam == 3)
                     {
                         if (_liveMatchTargetPlayers == 2 && !_readyPlayers.Contains(steamId))
                         {
+                            // 1v1 局：非參賽者絕對不准加入，強制踢回觀戰
                             Server.NextFrame(() => {
                                 if (player.IsValid) {
                                     player.ChangeTeam(CsTeam.Spectator);
@@ -180,6 +180,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         }
                         else if (_liveMatchTargetPlayers > 2 && !_readyPlayers.Contains(steamId))
                         {
+                            // 2v2 局：允許替補，檢查人數是否已滿 (極度輕量迴圈)
                             int currentCount = 0;
                             foreach (var p in Utilities.GetPlayers())
                             {
@@ -198,10 +199,13 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                             }
                             else
                             {
+                                // 替補合法加入，重新賦予參賽資格保護
                                 _readyPlayers.Add(steamId);
                             }
                         }
                     }
+                    
+                    // 檢查是否有人離開(跳觀戰/斷線)導致人數不足而需要中斷比賽
                     CheckAndResetGameImmediate();
                 }
             }
@@ -209,14 +213,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }, HookMode.Post);
 
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
-
-        // 【修改】正常死亡時，呼叫雙重延遲清理屍體
-        RegisterEventHandler<EventPlayerDeath>((@event, info) =>
-        {
-            ClearAllRagdolls();
-            return HookResult.Continue;
-        });
-
         RegisterEventHandler<EventCsWinPanelMatch>(OnMatchEnd);
 
         RegisterListener<Listeners.OnMapStart>(mapName => 
@@ -225,27 +221,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
             Server.NextFrame(() => {
                 Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
-            });
-        });
-    }
-
-    // 【終極超渡機制】清除所有屍體 (使用雙重幀延遲，確保 CS2 引擎已完全生成實體)
-    private void ClearAllRagdolls()
-    {
-        Server.NextFrame(() => {
-            Server.NextFrame(() => {
-                try 
-                {
-                    var ragdolls = Utilities.FindAllEntitiesByDesignerName<CBaseEntity>("cs_ragdoll");
-                    foreach (var ragdoll in ragdolls)
-                    {
-                        if (ragdoll != null && ragdoll.IsValid)
-                        {
-                            ragdoll.Remove();
-                        }
-                    }
-                } 
-                catch (Exception) { }
             });
         });
     }
@@ -523,6 +498,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         
         ulong steamId = player.SteamID;
 
+        // 【二次防護】玩家重生時，如果比賽中且身分不合法，沒收發槍並踢回觀戰
         if (_isMatchLive && (player.TeamNum == 2 || player.TeamNum == 3))
         {
             if (!_readyPlayers.Contains(steamId))

@@ -477,7 +477,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
             Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 傢 已 準 備，{modeText} 比 賽 開 始");
-            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}２４{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
+            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}２０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
             
             _privateCheckTimer?.Kill();
             _privateCheckTimer = null;

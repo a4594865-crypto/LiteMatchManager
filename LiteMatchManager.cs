@@ -62,9 +62,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.7_Sniper_MatchZy_Optimized";
+    public override string ModuleVersion => "8.8_Sniper_MatchZy_UI_Fix";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純狙擊PK模式 + MatchZy架構級HUD防閃爍 + 首局提示";
+    public override string ModuleDescription => "純狙擊PK模式 + 基於v8.7 + 灰框破除修復";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -106,12 +106,17 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _isHudActive = false;
             foreach (var p in Utilities.GetPlayers())
             {
-                if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml("");
+                if (p != null && p.IsValid && !p.IsBot)
+                {
+                    // 【修復】雙重清除大法，打碎殘留的灰色玻璃
+                    p.PrintToCenterHtml(""); 
+                    p.PrintToCenter(" ");    
+                }
             }
             return;
         }
 
-        // 高效派發，絕對靜止且不消耗多餘算力
+        // 搭配獨立的 FlashingHtmlHudFix 插件，這個 OnTick 發送可以強勢抵擋原生 UI 覆蓋，而且絕對不閃！
         foreach (var p in Utilities.GetPlayers())
         {
             if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(_cachedHudHtml);
@@ -135,7 +140,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v8.7 (MatchZy級HUD版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v8.8 (破除灰框修復版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -780,6 +785,16 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
         _isHudActive = false; // 重置時關閉 HUD
+        
+        // 【修復】重置遊戲狀態時，一併清除畫面上可能殘留的灰框
+        foreach (var p in Utilities.GetPlayers())
+        {
+            if (p != null && p.IsValid && !p.IsBot)
+            {
+                p.PrintToCenterHtml("");
+                p.PrintToCenter(" ");
+            }
+        }
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

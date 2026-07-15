@@ -38,6 +38,12 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("MapList")] 
     public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
 
+    // ==========================================
+    // 【新增】HUD 刷新頻率控制 (單位：秒)
+    // 建議值：1.0 ~ 2.5 之間，不建議超過 3.0，否則 HUD 會消失重現
+    // ==========================================
+    [JsonPropertyName("HudRefreshInterval")] public float HudRefreshInterval { get; set; } = 1.0f;
+
     [JsonPropertyName("HudDuration_Prep")] public float HudDuration_Prep { get; set; } = 2.0f;
     [JsonPropertyName("HudDuration_Start")] public float HudDuration_Start { get; set; } = 4.0f;
     [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 3.0f;
@@ -62,9 +68,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.8_Sniper_AntiFlash_Magic";
+    public override string ModuleVersion => "8.9_Sniper_Custom_Refresh";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純狙擊PK模式 + 隱形空白字串欺騙防閃爍 + 首局提示";
+    public override string ModuleDescription => "純狙擊PK模式 + HUD頻率完全自訂 + 首局提示";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -84,7 +90,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
 
     // ==========================================
-    // 【v8.8 升級】隱形字串欺騙大法 (1秒極省效能 + 完美防閃爍)
+    // 動態讀取設定檔的刷新頻率
     // ==========================================
     private CounterStrikeSharp.API.Modules.Timers.Timer? _hudKeepAliveTimer;
     private string _currentHudText = "";
@@ -112,21 +118,19 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         _hudKeepAliveTimer?.Kill();
 
-        // 改為最穩定且省效能的 1.0 秒計時器
-        _hudKeepAliveTimer = AddTimer(1.0f, () =>
+        // 這裡改吃你設定檔裡面的 Config.HudRefreshInterval
+        _hudKeepAliveTimer = AddTimer(Config.HudRefreshInterval, () =>
         {
-            _hudTimeLeft -= 1.0f;
+            _hudTimeLeft -= Config.HudRefreshInterval;
             if (_hudTimeLeft <= 0)
             {
-                BroadcastCenterHtml(""); // 清除黑框
+                BroadcastCenterHtml(""); 
                 _hudKeepAliveTimer?.Kill();
                 _hudKeepAliveTimer = null;
             }
             else
             {
                 _spaceToggle = !_spaceToggle;
-                // 核心關鍵：加入一個隱形的空格 ( \u200B 是 HTML 支援的零寬字元 )
-                // 這樣對玩家肉眼看不出變化，但 CS2 引擎會判定這是一條全新字串，無縫覆蓋防閃爍！
                 string finalText = _currentHudText + (_spaceToggle ? "\u200B" : "");
                 BroadcastCenterHtml(finalText);
             }
@@ -150,7 +154,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v8.8 (隱形防閃版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v8.9 (HUD頻率自訂版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);

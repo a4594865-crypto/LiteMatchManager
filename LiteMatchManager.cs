@@ -63,9 +63,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.11_Sniper_Slayer_OnTick";
+    public override string ModuleVersion => "8.12_Sniper_Slayer_OnTick_Fixed";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純狙擊PK模式 + SLAYER同款OnTick暴力防閃 + 首局提示";
+    public override string ModuleDescription => "純狙擊PK模式 + SLAYER同款OnTick暴力防閃 + 編譯修復";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -85,7 +85,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
 
     // ==========================================
-    // 【v8.11 升級】SLAYER 同款 OnTick 暴力鎖死系統
+    // 【v8.12】去除舊版 API 的連線檢查，使用最穩定的 p.IsValid 暴力鎖死系統
     // ==========================================
     private bool _isHudActive = false;
     private string _cachedHudHtml = ""; 
@@ -106,19 +106,17 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         if (Server.CurrentTime >= _hudEndTime)
         {
             _isHudActive = false;
-            var validPlayersEnd = Utilities.GetPlayers().Where(p => p != null && p.IsValid && !p.IsBot && p.Connected == PlayerConnectedState.PlayerConnected);
-            foreach (var p in validPlayersEnd)
+            foreach (var p in Utilities.GetPlayers())
             {
-                p.PrintToCenterHtml("");
+                if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml("");
             }
             return;
         }
 
         // 時間還沒到，每秒 64 次瘋狂覆蓋，徹底壓制動畫
-        var validPlayers = Utilities.GetPlayers().Where(p => p != null && p.IsValid && !p.IsBot && p.Connected == PlayerConnectedState.PlayerConnected);
-        foreach (var p in validPlayers)
+        foreach (var p in Utilities.GetPlayers())
         {
-            p.PrintToCenterHtml(_cachedHudHtml);
+            if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(_cachedHudHtml);
         }
     }
 
@@ -139,7 +137,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v8.11 (OnTick暴力鎖死版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v8.12 (OnTick暴力鎖死版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);

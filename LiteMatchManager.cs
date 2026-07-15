@@ -9,6 +9,7 @@ using CounterStrikeSharp.API.Modules.Cvars;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using System;
+using System.Linq;
 
 namespace LiteMatchManager;
 
@@ -38,12 +39,6 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("MapList")] 
     public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
 
-    // ==========================================
-    // 【新增】HUD 刷新頻率控制 (單位：秒)
-    // 建議值：1.0 ~ 2.5 之間，不建議超過 3.0，否則 HUD 會消失重現
-    // ==========================================
-    [JsonPropertyName("HudRefreshInterval")] public float HudRefreshInterval { get; set; } = 1.0f;
-
     [JsonPropertyName("HudDuration_Prep")] public float HudDuration_Prep { get; set; } = 2.0f;
     [JsonPropertyName("HudDuration_Start")] public float HudDuration_Start { get; set; } = 4.0f;
     [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 3.0f;
@@ -68,9 +63,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.9_Sniper_Custom_Refresh";
+    public override string ModuleVersion => "8.11_Sniper_Slayer_OnTick";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純狙擊PK模式 + HUD頻率完全自訂 + 首局提示";
+    public override string ModuleDescription => "純狙擊PK模式 + SLAYER同款OnTick暴力防閃 + 首局提示";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -90,51 +85,41 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
 
     // ==========================================
-    // 動態讀取設定檔的刷新頻率
+    // 【v8.11 升級】SLAYER 同款 OnTick 暴力鎖死系統
     // ==========================================
-    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudKeepAliveTimer;
-    private string _currentHudText = "";
-    private float _hudTimeLeft = 0f;
-    private bool _spaceToggle = false;
-
-    private void BroadcastCenterHtml(string htmlContent)
-    {
-        foreach (var p in Utilities.GetPlayers())
-        {
-            if (p != null && p.IsValid && !p.IsBot)
-            {
-                p.PrintToCenterHtml(htmlContent);
-            }
-        }
-    }
+    private bool _isHudActive = false;
+    private string _cachedHudHtml = ""; 
+    private float _hudEndTime = 0f;
 
     private void ShowHudForSeconds(string html, float duration)
     {
-        _currentHudText = html;
-        _hudTimeLeft = duration;
-        _spaceToggle = false;
+        _cachedHudHtml = html; 
+        _hudEndTime = Server.CurrentTime + duration;
+        _isHudActive = true; 
+    }
 
-        BroadcastCenterHtml(_currentHudText);
+    private void OnTick()
+    {
+        if (!_isHudActive) return;
 
-        _hudKeepAliveTimer?.Kill();
-
-        // 這裡改吃你設定檔裡面的 Config.HudRefreshInterval
-        _hudKeepAliveTimer = AddTimer(Config.HudRefreshInterval, () =>
+        // 如果時間到了，清除畫面並停止發送
+        if (Server.CurrentTime >= _hudEndTime)
         {
-            _hudTimeLeft -= Config.HudRefreshInterval;
-            if (_hudTimeLeft <= 0)
+            _isHudActive = false;
+            var validPlayersEnd = Utilities.GetPlayers().Where(p => p != null && p.IsValid && !p.IsBot && p.Connected == PlayerConnectedState.PlayerConnected);
+            foreach (var p in validPlayersEnd)
             {
-                BroadcastCenterHtml(""); 
-                _hudKeepAliveTimer?.Kill();
-                _hudKeepAliveTimer = null;
+                p.PrintToCenterHtml("");
             }
-            else
-            {
-                _spaceToggle = !_spaceToggle;
-                string finalText = _currentHudText + (_spaceToggle ? "\u200B" : "");
-                BroadcastCenterHtml(finalText);
-            }
-        }, TimerFlags.REPEAT);
+            return;
+        }
+
+        // 時間還沒到，每秒 64 次瘋狂覆蓋，徹底壓制動畫
+        var validPlayers = Utilities.GetPlayers().Where(p => p != null && p.IsValid && !p.IsBot && p.Connected == PlayerConnectedState.PlayerConnected);
+        foreach (var p in validPlayers)
+        {
+            p.PrintToCenterHtml(_cachedHudHtml);
+        }
     }
 
     public void OnConfigParsed(LiteMatchConfig config)
@@ -154,7 +139,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v8.9 (HUD頻率自訂版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v8.11 (OnTick暴力鎖死版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -167,6 +152,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         });
 
         RegisterEventHandler<EventRoundStart>(OnRoundStart);
+        
+        // 註冊核心的 OnTick
+        RegisterListener<Listeners.OnTick>(OnTick);
         
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
@@ -795,8 +783,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveMatchTargetPlayers = 0; 
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
-        
-        _hudKeepAliveTimer?.Kill(); // 重置時關閉 HUD 計時器
+        _isHudActive = false; // 重置時關閉 HUD
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

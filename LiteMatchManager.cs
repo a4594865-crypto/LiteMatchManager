@@ -2,6 +2,7 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Timers; // 【修正】把這個被我不小心刪掉的靈魂加回來了！
 using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Cvars;
@@ -61,9 +62,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.5_Sniper_Solid_HUD";
+    public override string ModuleVersion => "8.6_Sniper_Perfect_HUD";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純狙擊PK模式 + OnTick絕對靜止HUD + 首局提示";
+    public override string ModuleDescription => "純狙擊PK模式 + 0.1秒極致平衡HUD + 修復編譯";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -83,11 +84,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
 
     // ==========================================
-    // 【升級】OnTick 終極硬核維持系統 (一秒刷新64次，絕不閃爍)
+    // 【升級】0.1 秒極致平衡防閃爍系統 (兼顧效能與畫面穩定)
     // ==========================================
-    private bool _isHudActive = false;
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudKeepAliveTimer;
     private string _currentHudText = "";
-    private float _hudEndTime = 0f;
+    private float _hudTimeLeft = 0f;
 
     private void BroadcastCenterHtml(string htmlContent)
     {
@@ -103,25 +104,27 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private void ShowHudForSeconds(string html, float duration)
     {
         _currentHudText = html;
-        _hudEndTime = Server.CurrentTime + duration;
-        _isHudActive = true; 
-        // 啟動後，OnTick 監聽器會每 0.015 秒自動發送一次
-    }
+        _hudTimeLeft = duration;
 
-    private void OnTick()
-    {
-        if (!_isHudActive) return;
-
-        // 如果目前時間超過了設定的結束時間，就停止發送並清除畫面
-        if (Server.CurrentTime >= _hudEndTime)
-        {
-            _isHudActive = false;
-            BroadcastCenterHtml(""); // 清除黑框
-            return;
-        }
-
-        // 時間還沒到，每幀強制刷新，保證絕對靜止不閃爍
         BroadcastCenterHtml(_currentHudText);
+
+        _hudKeepAliveTimer?.Kill();
+
+        // 建立 0.1 秒的高頻計時器，完美壓制動畫又不吃效能
+        _hudKeepAliveTimer = AddTimer(0.1f, () =>
+        {
+            _hudTimeLeft -= 0.1f;
+            if (_hudTimeLeft <= 0)
+            {
+                BroadcastCenterHtml(""); // 清除黑框
+                _hudKeepAliveTimer?.Kill();
+                _hudKeepAliveTimer = null;
+            }
+            else
+            {
+                BroadcastCenterHtml(_currentHudText);
+            }
+        }, TimerFlags.REPEAT);
     }
 
     public void OnConfigParsed(LiteMatchConfig config)
@@ -141,7 +144,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v8.5 (OnTick防閃爍版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v8.6 (極致平衡HUD版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -154,9 +157,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         });
 
         RegisterEventHandler<EventRoundStart>(OnRoundStart);
-        
-        // 註冊 OnTick 監聽器
-        RegisterListener<Listeners.OnTick>(OnTick);
         
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
@@ -785,7 +785,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveMatchTargetPlayers = 0; 
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
-        _isHudActive = false; // 重置時也關閉 HUD
+        
+        _hudKeepAliveTimer?.Kill(); // 重置時同時清掉計時器
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

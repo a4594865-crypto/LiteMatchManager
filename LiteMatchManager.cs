@@ -9,7 +9,6 @@ using CounterStrikeSharp.API.Modules.Cvars;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using System;
-using System.Linq;
 
 namespace LiteMatchManager;
 
@@ -37,7 +36,7 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("Duel_MapChangeDelay")] public int MapChangeDelay { get; set; } = 5;
     
     [JsonPropertyName("MapList")] 
-    public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
+    public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "awp_lego_fix_pro:3714256540"];
 
     [JsonPropertyName("HudDuration_Prep")] public float HudDuration_Prep { get; set; } = 2.0f;
     [JsonPropertyName("HudDuration_Start")] public float HudDuration_Start { get; set; } = 4.0f;
@@ -63,9 +62,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.15_Sniper_Engine_Hotfix";
+    public override string ModuleVersion => "8.17_Sniper_Native_UI_Fix";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純狙擊PK模式 + 單次發送 + 內建底層引擎防閃修復";
+    public override string ModuleDescription => "純狙擊PK模式 + 喚醒原生暖身UI修復版";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -83,41 +82,15 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
+
+    // ==========================================
+    // 【v8.17】加入喚醒 CS2 原生 UI 機制
+    // ==========================================
     private CounterStrikeSharp.API.Modules.Timers.Timer? _hudClearTimer;
-
-    // ==========================================
-    // 【v8.15】融合 FlashingHtmlHudFix 引擎修復模組
-    // ==========================================
-    private CCSGameRules? _gameRules;
-    private bool _gameRulesInitialized;
-
-    private void InitializeGameRules()
-    {
-        if (_gameRulesInitialized) return;
-        
-        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
-        _gameRules = gameRulesProxy?.GameRules;
-        _gameRulesInitialized = _gameRules != null;
-    }
-
-    private void OnTickEngineFix()
-    {
-        if (!_gameRulesInitialized)
-        {
-            InitializeGameRules();
-            return;
-        }
-
-        if (_gameRules != null)
-        {
-            // 修復 CS2 引擎 Bug，讓 HTML 黑框不再抽搐
-            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
-        }
-    }
 
     private void ShowHudForSeconds(string html, float duration)
     {
-        // 發送一次
+        // 1. 發送彩色黑框
         foreach (var p in Utilities.GetPlayers())
         {
             if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
@@ -125,12 +98,18 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         _hudClearTimer?.Kill();
 
-        // 倒數清除
+        // 2. 時間到了，進行雙重清除與喚醒
         _hudClearTimer = AddTimer(duration, () =>
         {
             foreach (var p in Utilities.GetPlayers())
             {
-                if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml("");
+                if (p != null && p.IsValid && !p.IsBot)
+                {
+                    // 拔掉那塊「透明空玻璃」
+                    p.PrintToCenterHtml(""); 
+                    // 塞一個空白字元給原生系統，強迫它把「暖身中」字體重繪回來！
+                    p.PrintToCenter(" "); 
+                }
             }
             _hudClearTimer = null;
         });
@@ -153,7 +132,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v8.15 (引擎修復完美版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v8.17 (原生UI喚醒版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -166,9 +145,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         });
 
         RegisterEventHandler<EventRoundStart>(OnRoundStart);
-        
-        // 註冊引擎修復 Tick
-        RegisterListener<Listeners.OnTick>(OnTickEngineFix);
         
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
@@ -215,7 +191,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     {
                         _readyPlayers.Remove(steamId);
                         if (!_isMatchLive)
-                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 消 準 備");
+                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 取 準 備");
                         else
                             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 退 出 了 戰 鬥 ( 移 至 觀 戰 )");
                     }
@@ -276,21 +252,12 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         RegisterListener<Listeners.OnMapStart>(mapName => 
         {
-            // 地圖重啟時重新抓取 GameRules
-            _gameRules = null;
-            _gameRulesInitialized = false;
-
             ResetMatchState();
             Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
             Server.NextFrame(() => {
                 Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
             });
         });
-
-        if (hotReload)
-        {
-            InitializeGameRules();
-        }
     }
 
     private HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)

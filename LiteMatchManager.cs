@@ -62,9 +62,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.17_Sniper_Native_UI_Fix";
+    public override string ModuleVersion => "8.18_Sniper_KeepAlive_Fix";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純狙擊PK模式 + 喚醒原生暖身UI修復版";
+    public override string ModuleDescription => "純狙擊PK模式 + 防禦原生UI覆蓋 + 完美清除灰框";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -84,35 +84,52 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
 
     // ==========================================
-    // 【v8.17】加入喚醒 CS2 原生 UI 機制
+    // 【v8.18】1.0秒防禦護盾 (抵擋原生暖身字體覆蓋) + 雙重清除
     // ==========================================
-    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudClearTimer;
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudKeepAliveTimer;
+    private string _currentHudText = "";
+    private float _hudTimeLeft = 0f;
 
     private void ShowHudForSeconds(string html, float duration)
     {
-        // 1. 發送彩色黑框
+        _currentHudText = html;
+        _hudTimeLeft = duration;
+
+        // 1. 第一次發送
         foreach (var p in Utilities.GetPlayers())
         {
-            if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
+            if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(_currentHudText);
         }
 
-        _hudClearTimer?.Kill();
+        _hudKeepAliveTimer?.Kill();
 
-        // 2. 時間到了，進行雙重清除與喚醒
-        _hudClearTimer = AddTimer(duration, () =>
+        // 2. 每 1.0 秒發送一次，強勢霸佔畫面，防止被原生字體蓋掉
+        _hudKeepAliveTimer = AddTimer(1.0f, () =>
         {
-            foreach (var p in Utilities.GetPlayers())
+            _hudTimeLeft -= 1.0f;
+            if (_hudTimeLeft <= 0)
             {
-                if (p != null && p.IsValid && !p.IsBot)
+                // 3. 時間到了，進行雙重清除打碎灰色玻璃
+                foreach (var p in Utilities.GetPlayers())
                 {
-                    // 拔掉那塊「透明空玻璃」
-                    p.PrintToCenterHtml(""); 
-                    // 塞一個空白字元給原生系統，強迫它把「暖身中」字體重繪回來！
-                    p.PrintToCenter(" "); 
+                    if (p != null && p.IsValid && !p.IsBot)
+                    {
+                        p.PrintToCenterHtml(""); 
+                        p.PrintToCenter(" "); 
+                    }
+                }
+                _hudKeepAliveTimer?.Kill();
+                _hudKeepAliveTimer = null;
+            }
+            else
+            {
+                // 時間還沒到，繼續發送防禦護盾
+                foreach (var p in Utilities.GetPlayers())
+                {
+                    if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(_currentHudText);
                 }
             }
-            _hudClearTimer = null;
-        });
+        }, TimerFlags.REPEAT);
     }
 
     public void OnConfigParsed(LiteMatchConfig config)
@@ -132,7 +149,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v8.17 (原生UI喚醒版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v8.18 (鐵三角防禦版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -191,7 +208,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     {
                         _readyPlayers.Remove(steamId);
                         if (!_isMatchLive)
-                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 取 準 備");
+                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 消 準 備");
                         else
                             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 退 出 了 戰 鬥 ( 移 至 觀 戰 )");
                     }
@@ -774,7 +791,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
         
-        _hudClearTimer?.Kill(); 
+        _hudKeepAliveTimer?.Kill(); 
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

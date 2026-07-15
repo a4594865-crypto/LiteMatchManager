@@ -9,6 +9,7 @@ using CounterStrikeSharp.API.Modules.Cvars;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using System;
+using System.Linq;
 
 namespace LiteMatchManager;
 
@@ -62,9 +63,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.9_Sniper_NaturalFade_Fix";
+    public override string ModuleVersion => "8.10_Ultimate_Dynamic_Engine_Fix";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純狙擊PK模式 + v8.7架構 + 自然淡出無灰框版";
+    public override string ModuleDescription => "純狙擊PK模式 + 動態防閃引擎 + 自然淡出無灰框版";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -84,33 +85,53 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
 
     // ==========================================
-    // 【MatchZy 級別 HUD 核心系統】
+    // 【v8.10】終極動態防閃引擎與 HUD 系統
     // ==========================================
     private bool _isHudActive = false;
     private string _cachedHudHtml = ""; 
     private float _hudEndTime = 0f;
 
+    private CCSGameRules? _gameRules;
+    private bool _gameRulesInitialized;
+
+    private void InitializeGameRules()
+    {
+        if (_gameRulesInitialized) return;
+        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
+        _gameRules = gameRulesProxy?.GameRules;
+        _gameRulesInitialized = _gameRules != null;
+    }
+
     private void ShowHudForSeconds(string html, float duration)
     {
-        _cachedHudHtml = html; // 先把字串快取起來，避免 OnTick 重複運算
+        _cachedHudHtml = html; 
         _hudEndTime = Server.CurrentTime + duration;
         _isHudActive = true; 
     }
 
     private void OnTick()
     {
+        // 1. 如果黑框沒有啟動，什麼都不做！(不吃效能，完美保留官方暖身字體)
         if (!_isHudActive) return;
 
+        // 2. 如果時間到了，放手！
         if (Server.CurrentTime >= _hudEndTime)
         {
-            // 【終極修復】：時間到，直接關閉發送，甚麼都不送！
-            // 不要發送 ""，也不要發送 " "。
-            // CS2 引擎會在接下來的幾秒內，以優雅的動畫自然淡出這些字體，絕對不留灰框！
+            // 直接關閉，讓 CS2 自然淡出字體，絕對不留灰框！
             _isHudActive = false;
             return;
         }
 
-        // 搭配獨立的 FlashingHtmlHudFix 插件，這個 OnTick 發送可以強勢抵擋原生 UI 覆蓋，而且絕對不閃！
+        // 3. 確保 GameRules 已初始化
+        if (!_gameRulesInitialized) InitializeGameRules();
+
+        // 4. 【動態防閃引擎】：只有黑框顯示的這幾秒，強制鎖死引擎，保證絕對不閃！
+        if (_gameRules != null)
+        {
+            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
+        }
+
+        // 5. 強勢霸佔畫面，防止被原生字體吃掉
         foreach (var p in Utilities.GetPlayers())
         {
             if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(_cachedHudHtml);
@@ -134,7 +155,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v8.9 (自然淡出無灰框版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v8.10 (終極動態開關版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -148,7 +169,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         RegisterEventHandler<EventRoundStart>(OnRoundStart);
         
-        // 註冊核心 OnTick
         RegisterListener<Listeners.OnTick>(OnTick);
         
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
@@ -257,12 +277,20 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         RegisterListener<Listeners.OnMapStart>(mapName => 
         {
+            _gameRules = null;
+            _gameRulesInitialized = false;
+
             ResetMatchState();
             Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
             Server.NextFrame(() => {
                 Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
             });
         });
+
+        if (hotReload)
+        {
+            InitializeGameRules();
+        }
     }
 
     private HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
@@ -778,9 +806,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveMatchTargetPlayers = 0; 
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
-        _isHudActive = false; // 重置時關閉 HUD
-        
-        // 【修復】：移除手動清空空字串的代碼，切換地圖時 CS2 引擎會自動銷毀所有介面！
+        _isHudActive = false; // 切換地圖或重置時，關閉黑框與防閃狀態
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

@@ -2,7 +2,7 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Commands;
-using CounterStrikeSharp.API.Modules.Timers; // 【修正】把這個被我不小心刪掉的靈魂加回來了！
+using CounterStrikeSharp.API.Modules.Timers; 
 using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Cvars;
@@ -62,9 +62,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.6_Sniper_Perfect_HUD";
+    public override string ModuleVersion => "8.7_Sniper_MatchZy_Optimized";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純狙擊PK模式 + 0.1秒極致平衡HUD + 修復編譯";
+    public override string ModuleDescription => "純狙擊PK模式 + MatchZy架構級HUD防閃爍 + 首局提示";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -84,47 +84,38 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
 
     // ==========================================
-    // 【升級】0.1 秒極致平衡防閃爍系統 (兼顧效能與畫面穩定)
+    // 【MatchZy 級別 HUD 核心系統】
     // ==========================================
-    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudKeepAliveTimer;
-    private string _currentHudText = "";
-    private float _hudTimeLeft = 0f;
-
-    private void BroadcastCenterHtml(string htmlContent)
-    {
-        foreach (var p in Utilities.GetPlayers())
-        {
-            if (p != null && p.IsValid && !p.IsBot)
-            {
-                p.PrintToCenterHtml(htmlContent);
-            }
-        }
-    }
+    private bool _isHudActive = false;
+    private string _cachedHudHtml = ""; 
+    private float _hudEndTime = 0f;
 
     private void ShowHudForSeconds(string html, float duration)
     {
-        _currentHudText = html;
-        _hudTimeLeft = duration;
+        _cachedHudHtml = html; // 先把字串快取起來，避免 OnTick 重複運算
+        _hudEndTime = Server.CurrentTime + duration;
+        _isHudActive = true; 
+    }
 
-        BroadcastCenterHtml(_currentHudText);
+    private void OnTick()
+    {
+        if (!_isHudActive) return;
 
-        _hudKeepAliveTimer?.Kill();
-
-        // 建立 0.1 秒的高頻計時器，完美壓制動畫又不吃效能
-        _hudKeepAliveTimer = AddTimer(0.1f, () =>
+        if (Server.CurrentTime >= _hudEndTime)
         {
-            _hudTimeLeft -= 0.1f;
-            if (_hudTimeLeft <= 0)
+            _isHudActive = false;
+            foreach (var p in Utilities.GetPlayers())
             {
-                BroadcastCenterHtml(""); // 清除黑框
-                _hudKeepAliveTimer?.Kill();
-                _hudKeepAliveTimer = null;
+                if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml("");
             }
-            else
-            {
-                BroadcastCenterHtml(_currentHudText);
-            }
-        }, TimerFlags.REPEAT);
+            return;
+        }
+
+        // 高效派發，絕對靜止且不消耗多餘算力
+        foreach (var p in Utilities.GetPlayers())
+        {
+            if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(_cachedHudHtml);
+        }
     }
 
     public void OnConfigParsed(LiteMatchConfig config)
@@ -144,7 +135,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v8.6 (極致平衡HUD版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v8.7 (MatchZy級HUD版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -157,6 +148,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         });
 
         RegisterEventHandler<EventRoundStart>(OnRoundStart);
+        
+        // 註冊核心 OnTick
+        RegisterListener<Listeners.OnTick>(OnTick);
         
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
@@ -785,8 +779,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveMatchTargetPlayers = 0; 
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
-        
-        _hudKeepAliveTimer?.Kill(); // 重置時同時清掉計時器
+        _isHudActive = false; // 重置時關閉 HUD
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

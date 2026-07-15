@@ -62,9 +62,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.8_Sniper_MatchZy_UI_Fix";
+    public override string ModuleVersion => "8.9_Sniper_NaturalFade_Fix";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純狙擊PK模式 + 基於v8.7 + 灰框破除修復";
+    public override string ModuleDescription => "純狙擊PK模式 + v8.7架構 + 自然淡出無灰框版";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -103,16 +103,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         if (Server.CurrentTime >= _hudEndTime)
         {
+            // 【終極修復】：時間到，直接關閉發送，甚麼都不送！
+            // 不要發送 ""，也不要發送 " "。
+            // CS2 引擎會在接下來的幾秒內，以優雅的動畫自然淡出這些字體，絕對不留灰框！
             _isHudActive = false;
-            foreach (var p in Utilities.GetPlayers())
-            {
-                if (p != null && p.IsValid && !p.IsBot)
-                {
-                    // 【修復】雙重清除大法，打碎殘留的灰色玻璃
-                    p.PrintToCenterHtml(""); 
-                    p.PrintToCenter(" ");    
-                }
-            }
             return;
         }
 
@@ -140,7 +134,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v8.8 (破除灰框修復版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v8.9 (自然淡出無灰框版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -786,15 +780,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _playerUnreadyTime.Clear();
         _isHudActive = false; // 重置時關閉 HUD
         
-        // 【修復】重置遊戲狀態時，一併清除畫面上可能殘留的灰框
-        foreach (var p in Utilities.GetPlayers())
-        {
-            if (p != null && p.IsValid && !p.IsBot)
-            {
-                p.PrintToCenterHtml("");
-                p.PrintToCenter(" ");
-            }
-        }
+        // 【修復】：移除手動清空空字串的代碼，切換地圖時 CS2 引擎會自動銷毀所有介面！
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

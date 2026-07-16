@@ -84,9 +84,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.29_Root_Node_Fix";
+    public override string ModuleVersion => "8.30_Height_Clipping_Fix";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "完美解決多行 XML 解析丟失問題";
+    public override string ModuleDescription => "解決大字體導致容器高度被裁切的 Bug";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -151,7 +151,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.29 (終極多行修正版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.30 (高度裁切修復版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -296,8 +296,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _isFirstRound = false; 
             Server.NextFrame(() =>
             {
-                // 【終極修復】加入外層 <font> 作為根節點，並使用嚴格 XML <br/> 換行
-                ShowHudForSeconds($"<font>{Config.HudHtml_Round1_Line1}<br/>{Config.HudHtml_Round1_Line2}</font>", Config.HudDuration_Round1);
+                // 【高度修復】加上 <br><br> 強制撐開灰框高度
+                ShowHudForSeconds($"{Config.HudHtml_Round1_Line1}<br>{Config.HudHtml_Round1_Line2}<br><br>", Config.HudDuration_Round1);
             });
         }
         return HookResult.Continue;
@@ -344,8 +344,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     {
         if (!_isMatchLive) return;
         
-        // 【終極修復】
-        ShowHudForSeconds($"<font>{Config.HudHtml_MatchAbort_Line1}<br/>{Config.HudHtml_MatchAbort_Line2}</font>", Config.HudDuration_Abort);
+        // 【高度修復】加上 <br><br> 強制撐開灰框高度
+        ShowHudForSeconds($"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}<br><br>", Config.HudDuration_Abort);
 
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}玩 家 離 退 對 戰 終 止，請 重 新 輸 入 {ChatColors.Lime}!R {ChatColors.Orange}對 戰");
         Server.ExecuteCommand("mp_warmup_start");
@@ -402,7 +402,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             if (currentTeamCount >= Config.MaxPlayersPerTeam)
             {
                 string teamName = teamIndex == 2 ? "恐怖份子 (T)" : "反恐小組 (CT)";
-                player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}加 入 失 敗！{teamName} 已 經 滿 員 ( 最 最 多 {ChatColors.Green}{Config.MaxPlayersPerTeam}{ChatColors.Orange} 人 )");
+                player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}加 入 失 敗！{teamName} 已 經 滿 員 ( 最 多 {ChatColors.Green}{Config.MaxPlayersPerTeam}{ChatColors.Orange} 人 )");
                 return HookResult.Handled; 
             }
         }
@@ -498,10 +498,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         int missingPlayers = targetPlayers - _readyPlayers.Count;
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}{player.PlayerName}{ChatColors.White} 已 準 備！準 備 進 度：{ChatColors.Green}{_readyPlayers.Count} / {targetPlayers}");
         
-        // 【終極修復】
+        // 【高度修復】加上 <br><br> 強制撐開灰框高度
         string prepString = targetPlayers == 2 
-            ? $"<font>{Config.HudHtml_Prep1v1_Line1}<br/>{string.Format(Config.HudHtml_Prep1v1_Line2, _readyPlayers.Count, missingPlayers)}</font>"
-            : $"<font>{Config.HudHtml_Prep2v2_Line1}<br/>{string.Format(Config.HudHtml_Prep2v2_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}</font>";
+            ? $"{Config.HudHtml_Prep1v1_Line1}<br>{string.Format(Config.HudHtml_Prep1v1_Line2, _readyPlayers.Count, missingPlayers)}<br><br>"
+            : $"{Config.HudHtml_Prep2v2_Line1}<br>{string.Format(Config.HudHtml_Prep2v2_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br><br>";
 
         ShowHudForSeconds(prepString, Config.HudDuration_Prep);
 
@@ -540,10 +540,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             int missingPlayers = targetPlayers - _readyPlayers.Count;
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Red}{player.PlayerName}{ChatColors.White} 取 消 了 準 備！準 備 進 度：{ChatColors.Green}{_readyPlayers.Count} / {targetPlayers}");
             
-            // 【終極修復】
+            // 【高度修復】加上 <br><br> 強制撐開灰框高度
             string prepString = targetPlayers == 2 
-                ? $"<font>{Config.HudHtml_Prep1v1_Line1}<br/>{string.Format(Config.HudHtml_Prep1v1_Line2, _readyPlayers.Count, missingPlayers)}</font>"
-                : $"<font>{Config.HudHtml_Prep2v2_Line1}<br/>{string.Format(Config.HudHtml_Prep2v2_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}</font>";
+                ? $"{Config.HudHtml_Prep1v1_Line1}<br>{string.Format(Config.HudHtml_Prep1v1_Line2, _readyPlayers.Count, missingPlayers)}<br><br>"
+                : $"{Config.HudHtml_Prep2v2_Line1}<br>{string.Format(Config.HudHtml_Prep2v2_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br><br>";
 
             ShowHudForSeconds(prepString, Config.HudDuration_Prep);
         }
@@ -575,10 +575,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
-            // 【終極修復】
+            // 【高度修復】加上 <br><br> 強制撐開灰框高度
             string hudStartText = totalPlayers == 2 
-                ? $"<font>{Config.HudHtml_MatchStart_1v1_Line1}<br/>{Config.HudHtml_MatchStart_1v1_Line2}</font>" 
-                : $"<font>{Config.HudHtml_MatchStart_2v2_Line1}<br/>{Config.HudHtml_MatchStart_2v2_Line2}</font>";
+                ? $"{Config.HudHtml_MatchStart_1v1_Line1}<br>{Config.HudHtml_MatchStart_1v1_Line2}<br><br>" 
+                : $"{Config.HudHtml_MatchStart_2v2_Line1}<br>{Config.HudHtml_MatchStart_2v2_Line2}<br><br>";
 
             ShowHudForSeconds(hudStartText, Config.HudDuration_Start);
 

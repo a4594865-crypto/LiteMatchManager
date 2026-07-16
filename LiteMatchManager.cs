@@ -563,7 +563,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             // 【最核心的 3 秒緩衝】：等玩家安穩看完上方的 HUD 3 秒鐘，才執行 live.cfg 讓地圖重啟開打！
             Console.WriteLine($"[LiteMatch] [MatchLive] 雙方準備就緒 ({modeText})！將於 4 秒後執行開賽設定檔：{Config.LiveConfigName}");
             _liveTimer?.Kill();
-            _liveTimer = AddTimer(4.0f, () => 
+            _liveTimer = AddTimer(3.5f, () => 
             {
                 Server.NextFrame(() => { Server.ExecuteCommand($"exec {Config.LiveConfigName}"); });
                 _liveTimer = null;

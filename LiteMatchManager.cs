@@ -39,13 +39,12 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("MapList")] 
     public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
 
-    // 這些秒數參數在不使用 OnTick 的情況下已失去強制清除作用，全權交由 CS2 原生 5 秒淡出接管
-    [JsonPropertyName("HudDuration_Prep")] public float HudDuration_Prep { get; set; } = 2.0f;
+    [JsonPropertyName("HudDuration_Prep")] public float HudDuration_Prep { get; set; } = 3.0f;
     [JsonPropertyName("HudDuration_Start")] public float HudDuration_Start { get; set; } = 4.0f;
     [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 3.0f;
     [JsonPropertyName("HudDuration_Round1")] public float HudDuration_Round1 { get; set; } = 4.0f;
 
-    // 【只放大字體】保留你指定的官方灰框與大字體
+    // 【字體放大】加入了 class='fontSize-xl' 與 class='fontSize-xxl'
     [JsonPropertyName("HudHtml_Prep1v1")] 
     public string HudHtml_Prep1v1 { get; set; } = "<span class='fontSize-xl'><font color='white'>✦ 觸 發 1 v 1 單 挑 ✦</font><br><font color='gray'>目前進度：</font> <font color='lime'>{0} / 2</font> <font color='gray'>( 尚缺 {1} 人 )</font></span>";
     
@@ -68,9 +67,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.19_Natural_Fade_Out";
+    public override string ModuleVersion => "8.20_Clean_NoTick";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "官方灰框 + 零跳動大字體 + 順應原生淡出無殘留";
+    public override string ModuleDescription => "官方灰框 + 無心跳 + 完美除錯清除 + 大字體";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -88,39 +87,31 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
-
-    private CCSGameRules? _gameRules;
-    private bool _gameRulesInitialized;
-
-    private void InitializeGameRules()
-    {
-        if (_gameRulesInitialized) return;
-        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
-        _gameRules = gameRulesProxy?.GameRules;
-        _gameRulesInitialized = _gameRules != null;
-    }
+    
+    // 用來精準清除畫面的定時器
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudClearTimer;
 
     private void ShowHudForSeconds(string html, float duration)
     {
-        // 核心改動：發送一次指令後，什麼都不做。
-        // 1. 解決 1.5 秒抽搐 (因為沒有 OnTick 狂刷)
-        // 2. 解決空殘留框 (因為我們不再發送 "" 觸發空框)
-        // 3. 完美平滑：大約 5 秒後，CS2 引擎會自己把這個字體跟框完美淡出。
+        // 1. 發送一次 HTML (無心跳跳動)
         foreach (var p in Utilities.GetPlayers())
         {
             if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
         }
-    }
 
-    private void OnTick()
-    {
-        // 徹底拿掉 HTML 刷新，只處理遊戲重啟邏輯
-        if (!_gameRulesInitialized) InitializeGameRules();
-
-        if (_gameRules != null)
+        // 2. 定時清除：時間到後發送空字串，徹底清掉灰框並釋放圖層
+        _hudClearTimer?.Kill();
+        _hudClearTimer = AddTimer(duration, () => 
         {
-            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
-        }
+            foreach (var p in Utilities.GetPlayers())
+            {
+                if (p != null && p.IsValid && !p.IsBot) 
+                {
+                    p.PrintToCenterHtml(""); 
+                    p.PrintToCenter(""); 
+                }
+            }
+        });
     }
 
     public void OnConfigParsed(LiteMatchConfig config)
@@ -140,7 +131,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.19 (順應原生淡出版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.20 (純淨除錯版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -154,7 +145,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         RegisterEventHandler<EventRoundStart>(OnRoundStart);
         
-        RegisterListener<Listeners.OnTick>(OnTick);
+        // 【已刪除 OnTick】：徹底解決一進伺服器官方暖場就消失的問題
         
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
@@ -262,20 +253,12 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         RegisterListener<Listeners.OnMapStart>(mapName => 
         {
-            _gameRules = null;
-            _gameRulesInitialized = false;
-
             ResetMatchState();
             Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
             Server.NextFrame(() => {
                 Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
             });
         });
-
-        if (hotReload)
-        {
-            InitializeGameRules();
-        }
     }
 
     private HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
@@ -792,6 +775,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveMatchTargetPlayers = 0; 
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
+        
+        // 確保定時器完美清除
+        _hudClearTimer?.Kill();
+        _hudClearTimer = null;
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

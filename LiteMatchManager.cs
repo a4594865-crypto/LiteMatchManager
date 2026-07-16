@@ -39,38 +39,38 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("MapList")] 
     public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
 
-    [JsonPropertyName("HudDuration_Prep")] public float HudDuration_Prep { get; set; } = 2.0f;
-    [JsonPropertyName("HudDuration_Start")] public float HudDuration_Start { get; set; } = 4.0f;
-    [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 3.0f;
-    [JsonPropertyName("HudDuration_Round1")] public float HudDuration_Round1 { get; set; } = 4.0f;
+    // 這些秒數參數在不使用 OnTick 的情況下已失去強制清除作用，全權交由 CS2 原生 5 秒淡出接管
+    [JsonPropertyName("HudDuration_Prep")] public float HudDuration_Prep { get; set; } = 5.0f;
+    [JsonPropertyName("HudDuration_Start")] public float HudDuration_Start { get; set; } = 3.0f;
+    [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 5.0f;
+    [JsonPropertyName("HudDuration_Round1")] public float HudDuration_Round1 { get; set; } = 3.0f;
 
-    // 【土炮黑魔法】上下加入純黑實心方塊 (█) 進行包夾，製造深黑色橫幅視覺！
+    // 【只放大字體】保留你指定的官方灰框與大字體
     [JsonPropertyName("HudHtml_Prep1v1")] 
-    public string HudHtml_Prep1v1 { get; set; } = "<span class='fontSize-xl'><font color='#000000'>████████████████</font><br><font color='white'>✦ 觸 發 1 v 1 單 挑 ✦</font><br><font color='gray'>目前進度：</font> <font color='lime'>{0} / 2</font> <font color='gray'>( 尚缺 {1} 人 )</font><br><font color='#000000'>████████████████</font></span>";
+    public string HudHtml_Prep1v1 { get; set; } = "<span class='fontSize-l'><font color='white'>✦ 觸 發 1 v 1 單 挑 ✦</font><br><font color='gray'>目前進度：</font> <font color='lime'>{0} / 2</font> <font color='gray'>( 尚缺 {1} 人 )</font></span>";
     
     [JsonPropertyName("HudHtml_Prep2v2")] 
-    public string HudHtml_Prep2v2 { get; set; } = "<span class='fontSize-xl'><font color='#000000'>████████████████</font><br><font color='white'>✦ 觸 發 2 v 2 團 戰 ✦</font><br><font color='gray'>目前進度：</font> <font color='lime'>{0} / {2}</font> <font color='gray'>( 尚缺 {1} 人 )</font><br><font color='#000000'>████████████████</font></span>";
+    public string HudHtml_Prep2v2 { get; set; } = "<span class='fontSize-xl'><font color='white'>✦ 觸 發 2 v 2 團 戰 ✦</font><br><font color='gray'>目前進度：</font> <font color='lime'>{0} / {2}</font> <font color='gray'>( 尚缺 {1} 人 )</font></span>";
     
-    // fontSize-xxl 字很大，所以黑方塊數量稍微調少，避免太長導致換行破圖
     [JsonPropertyName("HudHtml_MatchStart_1v1")] 
-    public string HudHtml_MatchStart_1v1 { get; set; } = "<span class='fontSize-xxl'><font color='#000000'>████████████</font><br><font color='red'>【 雙 方 就 緒 】</font><br><font color='gold'>★ 1 v 1 狙 擊 單 挑 ． 正 式 展 開 ★</font><br><font color='#000000'>████████████</font></span>";
+    public string HudHtml_MatchStart_1v1 { get; set; } = "<span class='fontSize-xxl'><font color='red'>【 雙 方 就 緒 】</font><br><font color='gold'>★ 1 v 1 狙 擊 單 挑 ． 正 式 展 開 ★</font></span>";
 
     [JsonPropertyName("HudHtml_MatchStart_2v2")] 
-    public string HudHtml_MatchStart_2v2 { get; set; } = "<span class='fontSize-xxl'><font color='#000000'>████████████</font><br><font color='red'>【 雙 陣 營 就 緒 】</font><br><font color='gold'>★ 2 v 2 狙 擊 生 死 鬥 ． 正 式 展 開 ★</font><br><font color='#000000'>████████████</font></span>";
+    public string HudHtml_MatchStart_2v2 { get; set; } = "<span class='fontSize-xxl'><font color='red'>【 雙 陣 營 就 緒 】</font><br><font color='gold'>★ 2 v 2 狙 擊 生 死 鬥 ． 正 式 展 開 ★</font></span>";
     
     [JsonPropertyName("HudHtml_MatchAbort")] 
-    public string HudHtml_MatchAbort { get; set; } = "<span class='fontSize-xxl'><font color='#000000'>████████████</font><br><font color='red'>[ 警 告 ] 玩 家 逃 跑 ， 戰 鬥 終 止</font><br><font color='white'>已 退 回 暖 身 模 式</font><br><font color='#000000'>████████████</font></span>";
+    public string HudHtml_MatchAbort { get; set; } = "<span class='fontSize-xxl'><font color='red'>[ 警 告 ] 玩 家 逃 跑 ， 戰 鬥 終 止</font><br><font color='white'>已 退 回 暖 身 模 式</font></span>";
 
     [JsonPropertyName("HudHtml_Round1")] 
-    public string HudHtml_Round1 { get; set; } = "<span class='fontSize-xxl'><font color='#000000'>████████████</font><br><font color='gold'>✦ 戰 鬥 開 始 ✦</font><br><font color='white'>率 先 取 得 </font><font color='lime'><b>２０</b></font><font color='white'> 勝 者 為 贏 家</font><br><font color='#000000'>████████████</font></span>";
+    public string HudHtml_Round1 { get; set; } = "<span class='fontSize-xxl'><font color='gold'>✦ 戰 鬥 開 始 ✦</font><br><font color='white'>率 先 取 得 </font><font color='lime'><b>２０</b></font><font color='white'> 勝 者 為 贏 家</font></span>";
 }
 
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.26_BlackBlock_Hack";
+    public override string ModuleVersion => "8.19_Natural_Fade_Out";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "官方灰框 + 零跳動大字體 + 土炮黑磚包夾版";
+    public override string ModuleDescription => "官方灰框 + 零跳動大字體 + 順應原生淡出無殘留";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -140,7 +140,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.26 (土炮黑磚包夾版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.19 (順應原生淡出版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);

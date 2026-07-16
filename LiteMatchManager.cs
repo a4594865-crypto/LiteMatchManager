@@ -102,17 +102,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
     }
 
-    private void OnTick()
-    {
-        // 徹底拿掉 HTML 刷新，只處理遊戲重啟邏輯
-        if (!_gameRulesInitialized) InitializeGameRules();
-
-        if (_gameRules != null)
-        {
-            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
-        }
-    }
-
+    
     public void OnConfigParsed(LiteMatchConfig config)
     {
         Config = config;

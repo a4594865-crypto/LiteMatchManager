@@ -44,7 +44,6 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 5.0f;
     [JsonPropertyName("HudDuration_Round1")] public float HudDuration_Round1 { get; set; } = 3.0f;
 
-    // 【全新分行架構】將標題與副標題分開，讓 JSON 設定檔更乾淨、更好改！
     [JsonPropertyName("HudHtml_Prep1v1_Line1")] 
     public string HudHtml_Prep1v1_Line1 { get; set; } = "<font class='fontSize-l' color='white'>✦ 觸 發 1 v 1 單 挑 ✦</font>";
     
@@ -85,9 +84,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.28_Split_Config";
+    public override string ModuleVersion => "8.29_Root_Node_Fix";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "官方灰框 + 修正版標籤 + 分行獨立設定架構";
+    public override string ModuleDescription => "完美解決多行 XML 解析丟失問題";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -152,7 +151,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.28 (分行獨立設定版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.29 (終極多行修正版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -297,8 +296,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _isFirstRound = false; 
             Server.NextFrame(() =>
             {
-                // 自動將 Line1 與 Line2 以 <br> 拼接
-                ShowHudForSeconds($"{Config.HudHtml_Round1_Line1}<br>{Config.HudHtml_Round1_Line2}", Config.HudDuration_Round1);
+                // 【終極修復】加入外層 <font> 作為根節點，並使用嚴格 XML <br/> 換行
+                ShowHudForSeconds($"<font>{Config.HudHtml_Round1_Line1}<br/>{Config.HudHtml_Round1_Line2}</font>", Config.HudDuration_Round1);
             });
         }
         return HookResult.Continue;
@@ -345,8 +344,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     {
         if (!_isMatchLive) return;
         
-        // 自動將 Line1 與 Line2 以 <br> 拼接
-        ShowHudForSeconds($"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}", Config.HudDuration_Abort);
+        // 【終極修復】
+        ShowHudForSeconds($"<font>{Config.HudHtml_MatchAbort_Line1}<br/>{Config.HudHtml_MatchAbort_Line2}</font>", Config.HudDuration_Abort);
 
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}玩 家 離 退 對 戰 終 止，請 重 新 輸 入 {ChatColors.Lime}!R {ChatColors.Orange}對 戰");
         Server.ExecuteCommand("mp_warmup_start");
@@ -403,7 +402,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             if (currentTeamCount >= Config.MaxPlayersPerTeam)
             {
                 string teamName = teamIndex == 2 ? "恐怖份子 (T)" : "反恐小組 (CT)";
-                player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}加 入 失 敗！{teamName} 已 經 滿 員 ( 最 多 {ChatColors.Green}{Config.MaxPlayersPerTeam}{ChatColors.Orange} 人 )");
+                player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}加 入 失 敗！{teamName} 已 經 滿 員 ( 最 最 多 {ChatColors.Green}{Config.MaxPlayersPerTeam}{ChatColors.Orange} 人 )");
                 return HookResult.Handled; 
             }
         }
@@ -499,10 +498,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         int missingPlayers = targetPlayers - _readyPlayers.Count;
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Green}{player.PlayerName}{ChatColors.White} 已 準 備！準 備 進 度：{ChatColors.Green}{_readyPlayers.Count} / {targetPlayers}");
         
-        // 將 Line1 與 Line2 動態拼接，並用 <br> 換行
+        // 【終極修復】
         string prepString = targetPlayers == 2 
-            ? $"{Config.HudHtml_Prep1v1_Line1}<br>{string.Format(Config.HudHtml_Prep1v1_Line2, _readyPlayers.Count, missingPlayers)}"
-            : $"{Config.HudHtml_Prep2v2_Line1}<br>{string.Format(Config.HudHtml_Prep2v2_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}";
+            ? $"<font>{Config.HudHtml_Prep1v1_Line1}<br/>{string.Format(Config.HudHtml_Prep1v1_Line2, _readyPlayers.Count, missingPlayers)}</font>"
+            : $"<font>{Config.HudHtml_Prep2v2_Line1}<br/>{string.Format(Config.HudHtml_Prep2v2_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}</font>";
 
         ShowHudForSeconds(prepString, Config.HudDuration_Prep);
 
@@ -541,10 +540,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             int missingPlayers = targetPlayers - _readyPlayers.Count;
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Red}{player.PlayerName}{ChatColors.White} 取 消 了 準 備！準 備 進 度：{ChatColors.Green}{_readyPlayers.Count} / {targetPlayers}");
             
-            // 將 Line1 與 Line2 動態拼接，並用 <br> 換行
+            // 【終極修復】
             string prepString = targetPlayers == 2 
-                ? $"{Config.HudHtml_Prep1v1_Line1}<br>{string.Format(Config.HudHtml_Prep1v1_Line2, _readyPlayers.Count, missingPlayers)}"
-                : $"{Config.HudHtml_Prep2v2_Line1}<br>{string.Format(Config.HudHtml_Prep2v2_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}";
+                ? $"<font>{Config.HudHtml_Prep1v1_Line1}<br/>{string.Format(Config.HudHtml_Prep1v1_Line2, _readyPlayers.Count, missingPlayers)}</font>"
+                : $"<font>{Config.HudHtml_Prep2v2_Line1}<br/>{string.Format(Config.HudHtml_Prep2v2_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}</font>";
 
             ShowHudForSeconds(prepString, Config.HudDuration_Prep);
         }
@@ -576,10 +575,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
-            // 將 Line1 與 Line2 動態拼接，並用 <br> 換行
+            // 【終極修復】
             string hudStartText = totalPlayers == 2 
-                ? $"{Config.HudHtml_MatchStart_1v1_Line1}<br>{Config.HudHtml_MatchStart_1v1_Line2}" 
-                : $"{Config.HudHtml_MatchStart_2v2_Line1}<br>{Config.HudHtml_MatchStart_2v2_Line2}";
+                ? $"<font>{Config.HudHtml_MatchStart_1v1_Line1}<br/>{Config.HudHtml_MatchStart_1v1_Line2}</font>" 
+                : $"<font>{Config.HudHtml_MatchStart_2v2_Line1}<br/>{Config.HudHtml_MatchStart_2v2_Line2}</font>";
 
             ShowHudForSeconds(hudStartText, Config.HudDuration_Start);
 

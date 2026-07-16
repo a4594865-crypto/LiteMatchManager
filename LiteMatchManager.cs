@@ -44,31 +44,32 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 3.0f;
     [JsonPropertyName("HudDuration_Round1")] public float HudDuration_Round1 { get; set; } = 4.0f;
 
+    // 嚴格控制在 255 字元內，杜絕 X!# 亂碼。保留官方灰框與大字體！
     [JsonPropertyName("HudHtml_Prep1v1")] 
-    public string HudHtml_Prep1v1 { get; set; } = "<span class='fontSize-xl'><font color='white'>✦ 觸 發 1 v 1 單 挑 ✦</font><br><font color='gray'>目前進度：</font> <font color='lime'>{0} / 2</font> <font color='gray'>( 尚缺 {1} 人 )</font></span>";
+    public string HudHtml_Prep1v1 { get; set; } = "<span class='fontSize-xl'><font color='white'>✦ 觸 發 1 v 1 單 挑 ✦</font><br><font color='gray'>進度：</font> <font color='lime'>{0} / 2</font> <font color='gray'>( 缺 {1} 人 )</font></span>";
     
     [JsonPropertyName("HudHtml_Prep2v2")] 
-    public string HudHtml_Prep2v2 { get; set; } = "<span class='fontSize-xl'><font color='white'>✦ 觸 發 2 v 2 團 戰 ✦</font><br><font color='gray'>目前進度：</font> <font color='lime'>{0} / {2}</font> <font color='gray'>( 尚缺 {1} 人 )</font></span>";
+    public string HudHtml_Prep2v2 { get; set; } = "<span class='fontSize-xl'><font color='white'>✦ 觸 發 2 v 2 團 戰 ✦</font><br><font color='gray'>進度：</font> <font color='lime'>{0} / {2}</font> <font color='gray'>( 缺 {1} 人 )</font></span>";
     
     [JsonPropertyName("HudHtml_MatchStart_1v1")] 
-    public string HudHtml_MatchStart_1v1 { get; set; } = "<span class='fontSize-xxl'><font color='red'>【 雙 方 就 緒 】</font><br><font color='gold'>★ 1 v 1 狙 擊 單 挑 ． 正 式 展 開 ★</font></span>";
+    public string HudHtml_MatchStart_1v1 { get; set; } = "<span class='fontSize-xxl'><font color='red'>【 雙 方 就 緒 】</font><br><font color='gold'>★ 1 v 1 狙 擊 單 挑 展開 ★</font></span>";
 
     [JsonPropertyName("HudHtml_MatchStart_2v2")] 
-    public string HudHtml_MatchStart_2v2 { get; set; } = "<span class='fontSize-xxl'><font color='red'>【 雙 陣 營 就 緒 】</font><br><font color='gold'>★ 2 v 2 狙 擊 生 死 鬥 ． 正 式 展 開 ★</font></span>";
+    public string HudHtml_MatchStart_2v2 { get; set; } = "<span class='fontSize-xxl'><font color='red'>【 雙 陣 營 就 緒 】</font><br><font color='gold'>★ 2 v 2 狙 擊 團 戰 展開 ★</font></span>";
     
     [JsonPropertyName("HudHtml_MatchAbort")] 
-    public string HudHtml_MatchAbort { get; set; } = "<span class='fontSize-xxl'><font color='red'>[ 警 告 ] 玩 家 逃 跑 ， 戰 鬥 終 止</font><br><font color='white'>已 退 回 暖 身 模 式</font></span>";
+    public string HudHtml_MatchAbort { get; set; } = "<span class='fontSize-xxl'><font color='red'>[警告] 玩 家 逃 跑，戰 鬥 終 止</font><br><font color='white'>已退回暖身模式</font></span>";
 
     [JsonPropertyName("HudHtml_Round1")] 
-    public string HudHtml_Round1 { get; set; } = "<span class='fontSize-xxl'><font color='gold'>✦ 戰 鬥 開 始 ✦</font><br><font color='white'>率 先 取 得 </font><font color='lime'><b>２０</b></font><font color='white'> 勝 者 為 贏 家</font></span>";
+    public string HudHtml_Round1 { get; set; } = "<span class='fontSize-xxl'><font color='gold'>✦ 戰 鬥 開 始 ✦</font><br><font color='white'>先取 </font><font color='lime'><b>２０</b></font><font color='white'> 勝者為贏</font></span>";
 }
 
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.22_Clean_ExternalFix";
+    public override string ModuleVersion => "8.24_Final_TaiChi_Sync";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "官方灰框 + 大字體 (防閃交由獨立插件處理)";
+    public override string ModuleDescription => "0.95秒太極拳同步 + 完美釋放官方暖場 + 杜絕X!#";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -87,30 +88,38 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
     
-    // 單純的清除計時器，不再有 0.2 秒狂刷邏輯
-    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudClearTimer;
+    // 用來打太極拳的計時器
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudDisplayTimer;
 
     private void ShowHudForSeconds(string html, float duration)
     {
-        // 發送一次，防閃效果交給 CS2FlashingHtmlHudFix 負責
-        foreach (var p in Utilities.GetPlayers())
-        {
-            if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
-        }
+        float remainingTime = duration;
 
-        // 時間到後，發送空字串清除
-        _hudClearTimer?.Kill();
-        _hudClearTimer = AddTimer(duration, () => 
+        _hudDisplayTimer?.Kill();
+        
+        // 第一時間先發送，佔據白板
+        foreach (var p in Utilities.GetPlayers())
+            if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
+
+        // 啟動 0.95 秒定時器。這剛好比官方 1.0 秒快一點點。
+        // 不會引起心跳跳動，且能完美蓋過官方的暖身字體。
+        _hudDisplayTimer = AddTimer(0.95f, () => 
         {
-            foreach (var p in Utilities.GetPlayers())
+            remainingTime -= 0.95f;
+            
+            // 時間到了，我們什麼都不做，直接退場！
+            // 這樣下一秒鐘，官方的暖場字體就會自然接管白板，不留任何灰框！
+            if (remainingTime <= 0)
             {
-                if (p != null && p.IsValid && !p.IsBot) 
-                {
-                    p.PrintToCenterHtml(""); 
-                    p.PrintToCenter(""); 
-                }
+                _hudDisplayTimer?.Kill();
+                _hudDisplayTimer = null;
+                return;
             }
-        });
+
+            foreach (var p in Utilities.GetPlayers())
+                if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
+                
+        }, TimerFlags.REPEAT);
     }
 
     public void OnConfigParsed(LiteMatchConfig config)
@@ -130,7 +139,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.22 (配合獨立防閃版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.24 (終極太極拳版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -721,8 +730,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
         
-        _hudClearTimer?.Kill();
-        _hudClearTimer = null;
+        _hudDisplayTimer?.Kill();
+        _hudDisplayTimer = null;
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

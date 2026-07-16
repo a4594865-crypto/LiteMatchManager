@@ -66,9 +66,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.22_Clean_ExternalFix";
+    public override string ModuleVersion => "8.23_Combo_Control";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "官方灰框 + 大字體 (防閃交由獨立插件處理)";
+    public override string ModuleDescription => "官方灰框大字體 + 聯動控制 FlashingFix 插件";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -86,26 +86,31 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
-    
-    // 單純的清除計時器，不再有 0.2 秒狂刷邏輯
     private CounterStrikeSharp.API.Modules.Timers.Timer? _hudClearTimer;
 
     private void ShowHudForSeconds(string html, float duration)
     {
-        // 發送一次，防閃效果交給 CS2FlashingHtmlHudFix 負責
+        // 1. 【啟動防閃】叫獨立插件開始鎖定畫面！
+        Server.ExecuteCommand("css_hud_fix_toggle 1");
+
+        // 2. 發送一次 HTML，依賴獨立插件達成無心跳完美靜止
         foreach (var p in Utilities.GetPlayers())
         {
             if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
         }
 
-        // 時間到後，發送空字串清除
+        // 3. 設定清除計時器
         _hudClearTimer?.Kill();
         _hudClearTimer = AddTimer(duration, () => 
         {
+            // 4. 【關閉防閃】叫獨立插件停手，把圖層控制權還給官方！
+            Server.ExecuteCommand("css_hud_fix_toggle 0");
+
             foreach (var p in Utilities.GetPlayers())
             {
                 if (p != null && p.IsValid && !p.IsBot) 
                 {
+                    // 5. 發送空字串，完美清除，官方暖場字體瞬間回歸
                     p.PrintToCenterHtml(""); 
                     p.PrintToCenter(""); 
                 }
@@ -130,7 +135,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.22 (配合獨立防閃版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.23 (防閃聯動版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -455,12 +460,15 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             foreach (var p in Utilities.GetPlayers())
             {
                 if (p != null && p.IsValid && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
+                {
                     activePlayers++;
+                }
             }
 
             if (activePlayers > 0 && activePlayers == _readyPlayers.Count)
             {
                 BroadcastWaitingMessage();
+                
                 _waitingTimer?.Kill();
                 _waitingTimer = AddTimer(Config.WaitingForOpponentInterval, BroadcastWaitingMessage, TimerFlags.REPEAT);
             }
@@ -721,8 +729,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
         
+        // 確保定時器完美清除，並且關閉防閃開關
         _hudClearTimer?.Kill();
         _hudClearTimer = null;
+        Server.ExecuteCommand("css_hud_fix_toggle 0");
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

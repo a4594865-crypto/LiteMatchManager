@@ -110,7 +110,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _isHudActive = true; 
     }
 
-    private void OnTick()
+private void OnTick()
     {
         if (!_isHudActive) return;
 
@@ -129,10 +129,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         foreach (var p in Utilities.GetPlayers())
         {
-            if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(_cachedHudHtml);
+            // 👇 把 PrintToCenterHtml 換成 PrintToCenterAlert
+            if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterAlert(_cachedHudHtml);
         }
     }
-
     public void OnConfigParsed(LiteMatchConfig config)
     {
         Config = config;

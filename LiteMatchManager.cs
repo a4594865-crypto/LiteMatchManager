@@ -45,24 +45,24 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 3.0f;
     [JsonPropertyName("HudDuration_Round1")] public float HudDuration_Round1 { get; set; } = 4.0f;
 
-    // 【只放大字體】保留你指定的官方灰框與大字體
+    // 【修改區域】：加入了 style='background-color: rgba(0,0,0,0.98);' 讓底色變得很黑很黑
     [JsonPropertyName("HudHtml_Prep1v1")] 
-    public string HudHtml_Prep1v1 { get; set; } = "<span class='fontSize-xl'><font color='white'>✦ 觸 發 1 v 1 單 挑 ✦</font><br><font color='gray'>目前進度：</font> <font color='lime'>{0} / 2</font> <font color='gray'>( 尚缺 {1} 人 )</font></span>";
+    public string HudHtml_Prep1v1 { get; set; } = "<span class='fontSize-xl' style='background-color: rgba(0,0,0,0.198); padding: 15px; border-radius: 8px;'><font color='white'>✦ 觸 發 1 v 1 單 挑 ✦</font><br><font color='gray'>目前進度：</font> <font color='lime'>{0} / 2</font> <font color='gray'>( 尚缺 {1} 人 )</font></span>";
     
     [JsonPropertyName("HudHtml_Prep2v2")] 
-    public string HudHtml_Prep2v2 { get; set; } = "<span class='fontSize-xl'><font color='white'>✦ 觸 發 2 v 2 團 戰 ✦</font><br><font color='gray'>目前進度：</font> <font color='lime'>{0} / {2}</font> <font color='gray'>( 尚缺 {1} 人 )</font></span>";
+    public string HudHtml_Prep2v2 { get; set; } = "<span class='fontSize-xl' style='background-color: rgba(0,0,0,0.198); padding: 15px; border-radius: 8px;'><font color='white'>✦ 觸 發 2 v 2 團 戰 ✦</font><br><font color='gray'>目前進度：</font> <font color='lime'>{0} / {2}</font> <font color='gray'>( 尚缺 {1} 人 )</font></span>";
     
     [JsonPropertyName("HudHtml_MatchStart_1v1")] 
-    public string HudHtml_MatchStart_1v1 { get; set; } = "<span class='fontSize-xxl'><font color='red'>【 雙 方 就 緒 】</font><br><font color='gold'>★ 1 v 1 狙 擊 單 挑 ． 正 式 展 開 ★</font></span>";
+    public string HudHtml_MatchStart_1v1 { get; set; } = "<span class='fontSize-xxl' style='background-color: rgba(0,0,0,0.198); padding: 20px; border-radius: 10px;'><font color='red'>【 雙 方 就 緒 】</font><br><font color='gold'>★ 1 v 1 狙 擊 單 挑 ． 正 式 展 開 ★</font></span>";
 
     [JsonPropertyName("HudHtml_MatchStart_2v2")] 
-    public string HudHtml_MatchStart_2v2 { get; set; } = "<span class='fontSize-xxl'><font color='red'>【 雙 陣 營 就 緒 】</font><br><font color='gold'>★ 2 v 2 狙 擊 生 死 鬥 ． 正 式 展 開 ★</font></span>";
+    public string HudHtml_MatchStart_2v2 { get; set; } = "<span class='fontSize-xxl' style='background-color: rgba(0,0,0,0.198); padding: 20px; border-radius: 10px;'><font color='red'>【 雙 陣 營 就 緒 】</font><br><font color='gold'>★ 2 v 2 狙 擊 生 死 鬥 ． 正 式 展 開 ★</font></span>";
     
     [JsonPropertyName("HudHtml_MatchAbort")] 
-    public string HudHtml_MatchAbort { get; set; } = "<span class='fontSize-xxl'><font color='red'>[ 警 告 ] 玩 家 逃 跑 ， 戰 鬥 終 止</font><br><font color='white'>已 退 回 暖 身 模 式</font></span>";
+    public string HudHtml_MatchAbort { get; set; } = "<span class='fontSize-xxl' style='background-color: rgba(0,0,0,0.198); padding: 20px; border-radius: 10px;'><font color='red'>[ 警 告 ] 玩 家 逃 跑 ， 戰 鬥 終 止</font><br><font color='white'>已 退 回 暖 身 模 式</font></span>";
 
     [JsonPropertyName("HudHtml_Round1")] 
-    public string HudHtml_Round1 { get; set; } = "<span class='fontSize-xxl'><font color='gold'>✦ 戰 鬥 開 始 ✦</font><br><font color='white'>率 先 取 得 </font><font color='lime'><b>２０</b></font><font color='white'> 勝 者 為 贏 家</font></span>";
+    public string HudHtml_Round1 { get; set; } = "<span class='fontSize-xxl' style='background-color: rgba(0,0,0,0.198); padding: 20px; border-radius: 10px;'><font color='gold'>✦ 戰 鬥 開 始 ✦</font><br><font color='white'>率 先 取 得 </font><font color='lime'><b>２０</b></font><font color='white'> 勝 者 為 贏 家</font></span>";
 }
 
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
@@ -89,7 +89,17 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
 
-  
+    private CCSGameRules? _gameRules;
+    private bool _gameRulesInitialized;
+
+    private void InitializeGameRules()
+    {
+        if (_gameRulesInitialized) return;
+        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
+        _gameRules = gameRulesProxy?.GameRules;
+        _gameRulesInitialized = _gameRules != null;
+    }
+
     private void ShowHudForSeconds(string html, float duration)
     {
         // 核心改動：發送一次指令後，什麼都不做。
@@ -102,7 +112,17 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
     }
 
-    
+    private void OnTick()
+    {
+        // 徹底拿掉 HTML 刷新，只處理遊戲重啟邏輯
+        if (!_gameRulesInitialized) InitializeGameRules();
+
+        if (_gameRules != null)
+        {
+            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
+        }
+    }
+
     public void OnConfigParsed(LiteMatchConfig config)
     {
         Config = config;
@@ -133,7 +153,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         });
 
         RegisterEventHandler<EventRoundStart>(OnRoundStart);
-   
+        
+        RegisterListener<Listeners.OnTick>(OnTick);
+        
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
             var player = @event.Userid;
@@ -240,12 +262,20 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         RegisterListener<Listeners.OnMapStart>(mapName => 
         {
+            _gameRules = null;
+            _gameRulesInitialized = false;
+
             ResetMatchState();
             Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
             Server.NextFrame(() => {
                 Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
             });
         });
+
+        if (hotReload)
+        {
+            InitializeGameRules();
+        }
     }
 
     private HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)

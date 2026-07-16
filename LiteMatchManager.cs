@@ -66,9 +66,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.21_Timer_Override_Fix";
+    public override string ModuleVersion => "8.22_Clean_ExternalFix";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "官方灰框 + 大字體 + 0.2秒柔性壓制版";
+    public override string ModuleDescription => "官方灰框 + 大字體 (防閃交由獨立插件處理)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -87,43 +87,30 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
     
-    // 用來每 0.2 秒壓制官方暖場字的計時器
-    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudDisplayTimer;
+    // 單純的清除計時器，不再有 0.2 秒狂刷邏輯
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudClearTimer;
 
     private void ShowHudForSeconds(string html, float duration)
     {
-        float remainingTime = duration;
-
-        // 先砍掉舊的計時器，避免重疊
-        _hudDisplayTimer?.Kill();
-        
-        // 第一時間先發送一次
+        // 發送一次，防閃效果交給 CS2FlashingHtmlHudFix 負責
         foreach (var p in Utilities.GetPlayers())
         {
             if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
         }
 
-        // 啟動 0.2 秒的柔性壓制計時器（1秒鐘發送5次，不引起跳動，又能壓死官方字）
-        _hudDisplayTimer = AddTimer(0.2f, () => 
+        // 時間到後，發送空字串清除
+        _hudClearTimer?.Kill();
+        _hudClearTimer = AddTimer(duration, () => 
         {
-            remainingTime -= 0.2f;
-            
-            // 時間到了，直接停手，不發送任何空字串，官方暖場字會自然接管白板！
-            if (remainingTime <= 0)
-            {
-                _hudDisplayTimer?.Kill();
-                _hudDisplayTimer = null;
-                return;
-            }
-
             foreach (var p in Utilities.GetPlayers())
             {
                 if (p != null && p.IsValid && !p.IsBot) 
                 {
-                    p.PrintToCenterHtml(html);
+                    p.PrintToCenterHtml(""); 
+                    p.PrintToCenter(""); 
                 }
             }
-        }, TimerFlags.REPEAT);
+        });
     }
 
     public void OnConfigParsed(LiteMatchConfig config)
@@ -143,7 +130,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.21 (柔性壓制完美版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.22 (配合獨立防閃版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -171,16 +158,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         _playerUnreadyTime.Remove(steamId);
                         _playerPrimary.Remove(steamId);
 
-                        if (_isMatchLive) 
-                        {
-                            CheckAndResetGameImmediate();
-                        }
-                        else 
-                        {
-                            Server.NextFrame(() => {
-                                CheckMatchStart(); 
-                            });
-                        }
+                        if (_isMatchLive) CheckAndResetGameImmediate();
+                        else Server.NextFrame(() => { CheckMatchStart(); });
                     }
                 } 
                 catch (Exception) { }
@@ -201,19 +180,15 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     if (_readyPlayers.Contains(steamId))
                     {
                         _readyPlayers.Remove(steamId);
-                        if (!_isMatchLive)
-                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 消 準 備");
-                        else
-                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 退 出 了 戰 鬥 ( 移 至 觀 戰 )");
+                        if (!_isMatchLive) Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 消 準 備");
+                        else Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 退 出 了 戰 鬥 ( 移 至 觀 戰 )");
                     }
                     _playerUnreadyTime.Remove(steamId); 
                 }
 
                 if (!_isMatchLive)
                 {
-                    Server.NextFrame(() => {
-                        CheckMatchStart(); 
-                    });
+                    Server.NextFrame(() => { CheckMatchStart(); });
                 }
                 else
                 {
@@ -246,10 +221,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                                     }
                                 });
                             }
-                            else
-                            {
-                                _readyPlayers.Add(steamId);
-                            }
+                            else _readyPlayers.Add(steamId);
                         }
                     }
                     CheckAndResetGameImmediate();
@@ -264,10 +236,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         RegisterListener<Listeners.OnMapStart>(mapName => 
         {
             ResetMatchState();
-            Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
-            Server.NextFrame(() => {
-                Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
-            });
+            Server.NextFrame(() => { Server.ExecuteCommand($"exec {Config.WarmupConfigName}"); });
         });
     }
 
@@ -276,18 +245,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         if (_isMatchLive && _isFirstRound)
         {
             _isFirstRound = false; 
-            Server.NextFrame(() =>
-            {
-                ShowHudForSeconds(Config.HudHtml_Round1, Config.HudDuration_Round1);
-            });
+            Server.NextFrame(() => { ShowHudForSeconds(Config.HudHtml_Round1, Config.HudDuration_Round1); });
         }
         return HookResult.Continue;
     }
 
     private int GetDynamicRequiredPlayers()
     {
-        int activeT = 0;
-        int activeCT = 0;
+        int activeT = 0, activeCT = 0;
         foreach (var p in Utilities.GetPlayers())
         {
             if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && !p.IsHLTV)
@@ -296,8 +261,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 if (p.TeamNum == 3) activeCT++;
             }
         }
-        int total = activeT + activeCT;
-        return total <= 2 ? 2 : Config.MinPlayersToStart;
+        return (activeT + activeCT) <= 2 ? 2 : Config.MinPlayersToStart;
     }
 
     private void CheckAndResetGameImmediate()
@@ -335,7 +299,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         else Server.ExecuteCommand("mp_warmup_pausetimer 1");
         
         ResetMatchState();
-        Console.WriteLine($"[LiteMatch] [AbortMatch] 對戰已終止！正在切換回暖身設定檔：{Config.WarmupConfigName}");
         Server.NextFrame(() => { Server.ExecuteCommand($"exec {Config.WarmupConfigName}"); });
     }
 
@@ -492,15 +455,12 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             foreach (var p in Utilities.GetPlayers())
             {
                 if (p != null && p.IsValid && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
-                {
                     activePlayers++;
-                }
             }
 
             if (activePlayers > 0 && activePlayers == _readyPlayers.Count)
             {
                 BroadcastWaitingMessage();
-                
                 _waitingTimer?.Kill();
                 _waitingTimer = AddTimer(Config.WaitingForOpponentInterval, BroadcastWaitingMessage, TimerFlags.REPEAT);
             }
@@ -566,7 +526,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _waitingTimer?.Kill();
             _waitingTimer = null;
             
-            Console.WriteLine($"[LiteMatch] [MatchLive] 雙方準備就緒 ({modeText})！正式執行開賽設定檔：{Config.LiveConfigName}");
             Server.NextFrame(() => { Server.ExecuteCommand($"exec {Config.LiveConfigName}"); });
         }
     }
@@ -624,7 +583,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             case "!ssg": _playerPrimary[steamId] = "weapon_ssg08"; ReplaceWeapon(player, "weapon_ssg08"); return true;
             case "!awp": _playerPrimary[steamId] = "weapon_awp"; ReplaceWeapon(player, "weapon_awp"); return true;
-            
             case "!gs": OnGsCommand(player, null!); return true;
         }
         return false;
@@ -646,9 +604,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
                 weapon.Remove();
                 Server.NextFrame(() => {
-                    if (player.IsValid && player.PawnIsAlive) {
-                        player.GiveNamedItem(newWeapon);
-                    }
+                    if (player.IsValid && player.PawnIsAlive) player.GiveNamedItem(newWeapon);
                 });
                 return; 
             }
@@ -682,9 +638,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         if (_playerUnreadyTime[steamId] >= Config.KickUnreadyPlayerTime) 
                         {
                             string kickedName = p.PlayerName;
-                            Server.NextFrame(() => {
-                                Server.ExecuteCommand($"kickid {p.UserId} Unready_Timeout");
-                            });
+                            Server.NextFrame(() => { Server.ExecuteCommand($"kickid {p.UserId} Unready_Timeout"); });
                             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Lime}{kickedName} {ChatColors.White}因 未 準 備 好 而 被 踢 出");
                             _playerUnreadyTime.Remove(steamId);
                         }
@@ -708,24 +662,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         foreach (var p in Utilities.GetPlayers())
         {
             if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && !p.IsHLTV && (p.TeamNum == 2 || p.TeamNum == 3))
-            {
                 totalPlayers++;
-            }
         }
 
         if (totalPlayers > 0 && totalPlayers == _readyPlayers.Count)
         {
-            string modeHint = "";
-
-            if (totalPlayers == 1)
-            {
-                modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}場 上 {ChatColors.Green}1 {ChatColors.White}人，等 對 手 加 入 {ChatColors.Green}1 v 1 {ChatColors.White}或 {ChatColors.Green}2 v 2 {ChatColors.White}對 戰";
-            }
-            else
-            {
-                modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}場 上 {ChatColors.Green}{totalPlayers} {ChatColors.White}人，等 對 手 加 入 {ChatColors.Green}2 v 2 {ChatColors.White}團 戰";
-            }
-
+            string modeHint = totalPlayers == 1 
+                ? $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}場 上 {ChatColors.Green}1 {ChatColors.White}人，等 對 手 加 入 {ChatColors.Green}1 v 1 {ChatColors.White}或 {ChatColors.Green}2 v 2 {ChatColors.White}對 戰"
+                : $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}場 上 {ChatColors.Green}{totalPlayers} {ChatColors.White}人，等 對 手 加 入 {ChatColors.Green}2 v 2 {ChatColors.White}團 戰";
             Server.PrintToChatAll(modeHint);
         }
     }
@@ -755,23 +699,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 string modeHint = "";
 
                 if (totalPlayers == 2)
-                {
                     modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}目 前 場 上 {ChatColors.Green}2 {ChatColors.White}人，雙 方 輸 入 {ChatColors.Orange}!R {ChatColors.White}即 可 直 接 {ChatColors.Green}1 v 1 單 挑{ChatColors.White}";
-                }
                 else if (totalPlayers > 2)
-                {
                     modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}{Config.MinPlayersToStart} {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}2 v 2 團戰{ChatColors.White}";
-                }
                 
                 if (_unreadyNamesCache.Count > 0)
-                {
                     Server.PrintToChatAll($" {_cachedPrefix} 尚未準備玩家：{ChatColors.Yellow}{string.Join(", ", _unreadyNamesCache)}{ChatColors.Default} | 對戰需滿 {ChatColors.Green}{targetPlayers}{ChatColors.Default} 人");
-                }
                 
-                if (!string.IsNullOrEmpty(modeHint))
-                {
-                    Server.PrintToChatAll(modeHint); 
-                }
+                if (!string.IsNullOrEmpty(modeHint)) Server.PrintToChatAll(modeHint); 
             }
         }
         catch (Exception) { }
@@ -786,9 +721,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
         
-        // 確保定時器完美清除
-        _hudDisplayTimer?.Kill();
-        _hudDisplayTimer = null;
+        _hudClearTimer?.Kill();
+        _hudClearTimer = null;
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

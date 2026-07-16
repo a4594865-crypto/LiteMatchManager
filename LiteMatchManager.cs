@@ -44,7 +44,6 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 3.0f;
     [JsonPropertyName("HudDuration_Round1")] public float HudDuration_Round1 { get; set; } = 4.0f;
 
-    // 【v8.16 視覺升級】背景改為 0.98 極致深黑，加入 class='fontSize-xl' 與 class='fontSize-xxl' 強制放大
     [JsonPropertyName("HudHtml_Prep1v1")] 
     public string HudHtml_Prep1v1 { get; set; } = "<span class='fontSize-xl' style='background-color: rgba(0,0,0,0.98); text-shadow: 3px 3px 3px #000000; padding: 20px; border-radius: 8px;'><font color='red'>✦ </font><font color='#D3D3D3'>觸 發 1 v 1 單 挑 </font><font color='red'>✦</font><br><font color='#D3D3D3'>目前進度：</font> <font color='#32CD32'><b>{0} / 2</b></font> <font color='#D3D3D3'>( 尚缺 {1} 人 )</font></span>";
     
@@ -67,9 +66,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.16_Max_Dark_Huge_Font";
+    public override string ModuleVersion => "8.17_True_Empty_Clear";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "極致深黑背景 + 官方巨大字體支援 + 完美釋放圖層";
+    public override string ModuleDescription => "完美歸零清除 + 無殘留灰框 + 巨型黑底字體";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -102,13 +101,13 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
     private void ShowHudForSeconds(string html, float duration)
     {
-        // 1. 發送一次，保持絕對靜止，沒有跳動感
+        // 1. 發送一次 HTML，保持絕對靜止無心跳
         foreach (var p in Utilities.GetPlayers())
         {
             if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
         }
 
-        // 2. 定時器：時間到強制奪回圖層
+        // 2. 定時器：時間到完美清除畫面
         _hudClearTimer?.Kill();
         _hudClearTimer = AddTimer(duration, () => 
         {
@@ -116,9 +115,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             {
                 if (p != null && p.IsValid && !p.IsBot) 
                 {
-                    // 【關鍵 Combo：完美歸還官方介面】
-                    p.PrintToCenterHtml(""); // 第一步：清掉我們的黑框
-                    p.PrintToCenter(" ");    // 第二步：發送空白普通文字，強制引擎關閉 HTML 模式！官方「暖場」瞬間回歸！
+                    // 【v8.17 關鍵修復】：發送真正的空字串 ""，不帶任何空白字元！
+                    // 這會讓 CS2 引擎徹底折疊 UI 容器，不留任何灰框，並瞬間還原暖場文字！
+                    p.PrintToCenterHtml(""); 
+                    p.PrintToCenter(""); 
                 }
             }
         });
@@ -150,7 +150,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.16 (巨型字體/極致深黑版) ");
+        Console.WriteLine("  LiteMatchManager v8.17 (終極除錯完美版) ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);

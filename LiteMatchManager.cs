@@ -67,9 +67,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.47_Fix4Sec";
+    public override string ModuleVersion => "8.48_CleanWarning";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "基於 LiteMatchManager_3 增加 5 秒初次無計時器提示，並修正為 4 秒開賽";
+    public override string ModuleDescription => "移除無用變數，修正編譯警告";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -79,13 +79,12 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private List<string> _unreadyNamesCache = new(64); 
     private Dictionary<ulong, string> _playerPrimary = new(64);
     
-    // 【新增】：用於 OnTick 的 5 秒無計時器追蹤
+    // 用於 OnTick 的 5 秒無計時器追蹤
     private Dictionary<ulong, float> _pendingInitialReminders = new(64);
     private HashSet<ulong> _hasReceivedInitialReminder = new(64);
 
     private bool _isMatchLive = false;
     private bool _isChangingMap = false; 
-    private bool _isFirstRound = false; 
     private int _liveMatchTargetPlayers = 0; 
     
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
@@ -124,7 +123,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
         }
 
-        // 【新增】：無計時器：利用伺服器心跳 (OnTick) 精準觸發 5 秒提示
+        // 無計時器：利用伺服器心跳 (OnTick) 精準觸發 5 秒提示
         if (_pendingInitialReminders.Count > 0)
         {
             float currentTime = Server.CurrentTime;
@@ -184,7 +183,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.47 (4秒開局修正版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.48 (清理編譯警告版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -212,7 +211,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         _playerUnreadyTime.Remove(steamId);
                         _playerPrimary.Remove(steamId);
                         
-                        // 【新增】：清除 5 秒提示記錄
+                        // 清除 5 秒提示記錄
                         _pendingInitialReminders.Remove(steamId);
                         _hasReceivedInitialReminder.Remove(steamId);
 
@@ -243,7 +242,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 
                 if (newTeam == 0 || newTeam == 1) 
                 {
-                    // 【新增】：玩家退到觀戰，清除提示標記，下次重進 T/CT 才能再次觸發 5 秒倒數
+                    // 玩家退到觀戰，清除提示標記，下次重進 T/CT 才能再次觸發 5 秒倒數
                     _pendingInitialReminders.Remove(steamId);
                     _hasReceivedInitialReminder.Remove(steamId);
 
@@ -521,7 +520,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _readyPlayers.Add(steamId);
         _playerUnreadyTime.Remove(steamId); 
         
-        // 【新增】：玩家已準備，立刻取消 5 秒的提示倒數
+        // 玩家已準備，立刻取消 5 秒的提示倒數
         _pendingInitialReminders.Remove(steamId); 
 
         int targetPlayers = GetDynamicRequiredPlayers();
@@ -599,7 +598,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             _isMatchLive = true;
             _liveMatchTargetPlayers = totalPlayers; 
-            _isFirstRound = true; 
             
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
@@ -635,7 +633,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         
         ulong steamId = player.SteamID;
 
-        // 【新增】：如果在暖身階段且剛重生到 T/CT 隊伍，觸發 5 秒無計時器提示
+        // 如果在暖身階段且剛重生到 T/CT 隊伍，觸發 5 秒無計時器提示
         if (!_isMatchLive && (player.TeamNum == 2 || player.TeamNum == 3))
         {
             if (!_readyPlayers.Contains(steamId) && !_hasReceivedInitialReminder.Contains(steamId))
@@ -848,12 +846,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     {
         _isMatchLive = false;
         _isChangingMap = false;
-        _isFirstRound = false; 
         _liveMatchTargetPlayers = 0; 
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
 
-        // 【新增】：重置 5 秒提示狀態，換地圖後進來能再提示
+        // 重置 5 秒提示狀態，換地圖後進來能再提示
         _pendingInitialReminders.Clear();
         _hasReceivedInitialReminder.Clear();
 

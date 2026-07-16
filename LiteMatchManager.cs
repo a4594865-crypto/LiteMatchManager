@@ -88,48 +88,43 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
 
-    private bool _isHudActive = false;
+    // [改良版 UI 變數]
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudTimer;
     private string _cachedHudHtml = ""; 
     private float _hudEndTime = 0f;
 
-    private CCSGameRules? _gameRules;
-    private bool _gameRulesInitialized;
-
-    private void InitializeGameRules()
-    {
-        if (_gameRulesInitialized) return;
-        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
-        _gameRules = gameRulesProxy?.GameRules;
-        _gameRulesInitialized = _gameRules != null;
-    }
-
+    // [改良版防閃爍 UI 處理引擎]
     private void ShowHudForSeconds(string html, float duration)
     {
         _cachedHudHtml = html; 
         _hudEndTime = Server.CurrentTime + duration;
-        _isHudActive = true; 
+
+        _hudTimer?.Kill();
+        
+        UpdateHud();
+
+        if (duration <= 0.5f) return;
+
+        _hudTimer = AddTimer(0.85f, () =>
+        {
+            if (Server.CurrentTime >= _hudEndTime)
+            {
+                _hudTimer?.Kill();
+                _hudTimer = null;
+                return;
+            }
+            UpdateHud();
+        }, TimerFlags.REPEAT);
     }
 
-    private void OnTick()
+    private void UpdateHud()
     {
-        if (!_isHudActive) return;
-
-        if (Server.CurrentTime >= _hudEndTime)
-        {
-            _isHudActive = false;
-            return;
-        }
-
-        if (!_gameRulesInitialized) InitializeGameRules();
-
-        if (_gameRules != null)
-        {
-            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
-        }
-
         foreach (var p in Utilities.GetPlayers())
         {
-            if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(_cachedHudHtml);
+            if (p != null && p.IsValid && !p.IsBot) 
+            {
+                p.PrintToCenterHtml(_cachedHudHtml);
+            }
         }
     }
 
@@ -163,8 +158,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         });
 
         RegisterEventHandler<EventRoundStart>(OnRoundStart);
-        
-        RegisterListener<Listeners.OnTick>(OnTick);
         
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
@@ -272,20 +265,12 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         RegisterListener<Listeners.OnMapStart>(mapName => 
         {
-            _gameRules = null;
-            _gameRulesInitialized = false;
-
             ResetMatchState();
             Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
             Server.NextFrame(() => {
                 Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
             });
         });
-
-        if (hotReload)
-        {
-            InitializeGameRules();
-        }
     }
 
     private HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
@@ -570,7 +555,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
-            // 【v8.11 更新】動態判斷是發送 1v1 還是 2v2 的開戰畫面！
             string hudStartText = totalPlayers == 2 ? Config.HudHtml_MatchStart_1v1 : Config.HudHtml_MatchStart_2v2;
             ShowHudForSeconds(hudStartText, Config.HudDuration_Start);
 
@@ -803,7 +787,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveMatchTargetPlayers = 0; 
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
-        _isHudActive = false;
+        
+        // 確保重置時清理 UI 計時器
+        _hudTimer?.Kill();
+        _hudTimer = null;
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

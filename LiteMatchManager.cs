@@ -88,44 +88,49 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
 
-    // [改良版 UI 變數]
-    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudTimer;
+    // [HUD UI 核心變數]
+    private bool _isHudActive = false;
     private string _cachedHudHtml = ""; 
     private float _hudEndTime = 0f;
 
-    // [改良版防閃爍 UI 處理引擎]
+    // [完美防閃爍引擎：利用隱形字元欺騙 CS2 的重置動畫]
+    private void OnTick()
+    {
+        if (!_isHudActive) return;
+
+        if (Server.CurrentTime >= _hudEndTime)
+        {
+            _isHudActive = false;
+            return;
+        }
+
+        // 動態生成 0~9 個「零寬度空白字元 (&#8203;)」
+        // 這些字元在畫面上是隱形的，但會讓 CS2 引擎認為這是一個「全新」的字串
+        // 從而達成平滑更新，徹底解決 1 秒一次的彈跳動畫！
+        string antiFlicker = "";
+        int invisibleSpacesCount = Server.TickCount % 10;
+        for (int i = 0; i < invisibleSpacesCount; i++)
+        {
+            antiFlicker += "&#8203;";
+        }
+        
+        // 將隱形字元附加在原 HTML 的尾巴
+        string dynamicHtml = _cachedHudHtml + antiFlicker;
+
+        foreach (var p in Utilities.GetPlayers())
+        {
+            if (p != null && p.IsValid && !p.IsBot)
+            {
+                p.PrintToCenterHtml(dynamicHtml);
+            }
+        }
+    }
+
     private void ShowHudForSeconds(string html, float duration)
     {
         _cachedHudHtml = html; 
         _hudEndTime = Server.CurrentTime + duration;
-
-        _hudTimer?.Kill();
-        
-        UpdateHud();
-
-        if (duration <= 0.5f) return;
-
-        _hudTimer = AddTimer(0.85f, () =>
-        {
-            if (Server.CurrentTime >= _hudEndTime)
-            {
-                _hudTimer?.Kill();
-                _hudTimer = null;
-                return;
-            }
-            UpdateHud();
-        }, TimerFlags.REPEAT);
-    }
-
-    private void UpdateHud()
-    {
-        foreach (var p in Utilities.GetPlayers())
-        {
-            if (p != null && p.IsValid && !p.IsBot) 
-            {
-                p.PrintToCenterHtml(_cachedHudHtml);
-            }
-        }
+        _isHudActive = true; 
     }
 
     public void OnConfigParsed(LiteMatchConfig config)
@@ -145,7 +150,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("    LiteMatchManager v8.11 (細節完美版) 初始化！ ");
+        Console.WriteLine("    LiteMatchManager v8.11 (黑框究極防閃版) 初始化！ ");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -158,6 +163,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         });
 
         RegisterEventHandler<EventRoundStart>(OnRoundStart);
+        
+        // 重新註冊 OnTick 以獲得最流暢的更新頻率
+        RegisterListener<Listeners.OnTick>(OnTick);
         
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
@@ -204,7 +212,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     {
                         _readyPlayers.Remove(steamId);
                         if (!_isMatchLive)
-                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 消 準 備");
+                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 取 消 準 備");
                         else
                             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 退 出 了 戰 鬥 ( 移 至 觀 戰 )");
                     }
@@ -787,10 +795,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveMatchTargetPlayers = 0; 
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
-        
-        // 確保重置時清理 UI 計時器
-        _hudTimer?.Kill();
-        _hudTimer = null;
+        _isHudActive = false;
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

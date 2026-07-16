@@ -39,12 +39,13 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("MapList")] 
     public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
 
+    // 這些秒數參數在不使用 OnTick 的情況下已失去強制清除作用，全權交由 CS2 原生 5 秒淡出接管
     [JsonPropertyName("HudDuration_Prep")] public float HudDuration_Prep { get; set; } = 2.0f;
     [JsonPropertyName("HudDuration_Start")] public float HudDuration_Start { get; set; } = 4.0f;
     [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 3.0f;
     [JsonPropertyName("HudDuration_Round1")] public float HudDuration_Round1 { get; set; } = 4.0f;
 
-    // 【只放大字體】加入 fontSize-xl (特大) 與 fontSize-xxl (超大)
+    // 【只放大字體】保留你指定的官方灰框與大字體
     [JsonPropertyName("HudHtml_Prep1v1")] 
     public string HudHtml_Prep1v1 { get; set; } = "<span class='fontSize-xl'><font color='white'>✦ 觸 發 1 v 1 單 挑 ✦</font><br><font color='gray'>目前進度：</font> <font color='lime'>{0} / 2</font> <font color='gray'>( 尚缺 {1} 人 )</font></span>";
     
@@ -67,9 +68,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.18_GreyBox_NoHeartbeat";
+    public override string ModuleVersion => "8.19_Natural_Fade_Out";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "官方灰框版 + 零跳動計時器 + 大字體";
+    public override string ModuleDescription => "官方灰框 + 零跳動大字體 + 順應原生淡出無殘留";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -87,9 +88,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
-    
-    // 【新增】精準清除 HUD 定時器
-    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudClearTimer;
 
     private CCSGameRules? _gameRules;
     private bool _gameRulesInitialized;
@@ -104,30 +102,19 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
     private void ShowHudForSeconds(string html, float duration)
     {
-        // 1. 拿掉心跳：只發送一次，畫面絕對靜止不抽搐
+        // 核心改動：發送一次指令後，什麼都不做。
+        // 1. 解決 1.5 秒抽搐 (因為沒有 OnTick 狂刷)
+        // 2. 解決空殘留框 (因為我們不再發送 "" 觸發空框)
+        // 3. 完美平滑：大約 5 秒後，CS2 引擎會自己把這個字體跟框完美淡出。
         foreach (var p in Utilities.GetPlayers())
         {
             if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
         }
-
-        // 2. 完美清除：時間到發送空字串，連官方暖場字都能完美歸還
-        _hudClearTimer?.Kill();
-        _hudClearTimer = AddTimer(duration, () => 
-        {
-            foreach (var p in Utilities.GetPlayers())
-            {
-                if (p != null && p.IsValid && !p.IsBot) 
-                {
-                    p.PrintToCenterHtml(""); 
-                    p.PrintToCenter(""); 
-                }
-            }
-        });
     }
 
     private void OnTick()
     {
-        // 拿掉 OnTick 內的 HTML 刷新狂暴轟炸，只保留遊戲規則重啟判斷
+        // 徹底拿掉 HTML 刷新，只處理遊戲重啟邏輯
         if (!_gameRulesInitialized) InitializeGameRules();
 
         if (_gameRules != null)
@@ -153,7 +140,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.18 (官方灰框/大字體無跳動版) ");
+        Console.WriteLine("  LiteMatchManager v8.19 (順應原生淡出版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -805,10 +792,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveMatchTargetPlayers = 0; 
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
-        
-        // 【新增】確保計時器完美清除
-        _hudClearTimer?.Kill();
-        _hudClearTimer = null;
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

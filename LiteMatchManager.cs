@@ -281,7 +281,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                                     if (player.IsValid) {
                                         player.ChangeTeam(CsTeam.Spectator);
                                         string modeText = _liveMatchTargetPlayers == 2 ? "單 挑" : "團 戰";
-                                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}{modeText} 已 開 始，無 法 中 途 加 入");
+                                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}{modeText} 比 賽 已 開 始，無 法 中 途 加 入");
                                     }
                                 });
                             }
@@ -415,7 +415,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     if (currentTeamCount >= liveTeamMax)
                     {
                         string modeText = _liveMatchTargetPlayers == 2 ? "單 挑" : "團 戰";
-                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}{modeText} 已 開 始，無 法 中 途 加 入");
+                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}{modeText} 比 賽 已 開 始，無 法 中 途 加 入");
                         return HookResult.Handled;
                     }
                 }

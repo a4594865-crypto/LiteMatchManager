@@ -121,7 +121,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             {
                 foreach (var p in Utilities.GetPlayers())
                 {
-                    if (p != null && p.IsValid && !p.IsBot && p.Connected == PlayerConnectedState.PlayerConnected)
+                    if (p != null && p.IsValid && !p.IsBot)
                     {
                         p.PrintToCenterHtml(_activeCenterMessage);
                     }

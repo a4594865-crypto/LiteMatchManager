@@ -35,52 +35,53 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("WarmupConfigName")] public string WarmupConfigName { get; set; } = "warmup.cfg";
     [JsonPropertyName("LiveConfigName")] public string LiveConfigName { get; set; } = "live.cfg";
     [JsonPropertyName("Duel_MapChangeDelay")] public int MapChangeDelay { get; set; } = 5;
-
+    
+    //  4 個秒數設定
     [JsonPropertyName("HudDuration_Prep")] public float HudDuration_Prep { get; set; } = 5.0f;
     [JsonPropertyName("HudDuration_Start")] public float HudDuration_Start { get; set; } = 4.0f;
     [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 5.0f;
     [JsonPropertyName("HudDuration_Round1")] public float HudDuration_Round1 { get; set; } = 3.0f;
-    
+
     [JsonPropertyName("MapList")] 
     public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
 
     [JsonPropertyName("HudHtml_Prep1v1_Line1")] 
-    public string HudHtml_Prep1v1_Line1 { get; set; } = "<font class='fontSize-l' color='lime'><b>✦</font> <font class='fontSize-l' color='white'>人 數 觸 發 <font class='fontSize-l' color='gold'>1 v 1</font> 單 挑 </font><font class='fontSize-l' color='lime'>✦</font></b>";
+    public string HudHtml_Prep1v1_Line1 { get; set; } = "<font class='fontSize-l' color='white'>✦ 觸 發 1 v 1 單 挑 ✦</font>";
     
     [JsonPropertyName("HudHtml_Prep1v1_Line2")] 
-    public string HudHtml_Prep1v1_Line2 { get; set; } = "<font class='fontSize-l' color='white'><b>進 度： </font><font class='fontSize-l' color='lime'>{0} / 2</font><font class='fontSize-l' color='white'> ( 尚 缺 <font class='fontSize-l' color='lime'><b>{1}</b></font> 人 )</font></b>";
+    public string HudHtml_Prep1v1_Line2 { get; set; } = "<font class='fontSize-l' color='gray'>進度： </font><font class='fontSize-l' color='lime'>{0} / 2</font><font class='fontSize-l' color='gray'> ( 尚缺 {1} 人 )</font>";
     
     [JsonPropertyName("HudHtml_Prep2v2_Line1")] 
-    public string HudHtml_Prep2v2_Line1 { get; set; } = "<font class='fontSize-l' color='lime'><b>✦</font> <font class='fontSize-l' color='white'>人 數 觸 發 <font class='fontSize-l' color='gold'>2 v 2</font> 團 戰 </font><font class='fontSize-l' color='lime'>✦</font></b>";
+    public string HudHtml_Prep2v2_Line1 { get; set; } = "<font class='fontSize-l' color='white'>✦ 觸 發 2 v 2 團 戰 ✦</font>";
     
     [JsonPropertyName("HudHtml_Prep2v2_Line2")] 
-    public string HudHtml_Prep2v2_Line2 { get; set; } = "<font class='fontSize-l' color='red'><b>進 度： </font><font class='fontSize-l' color='lime'>{0} / {2}</font><font class='fontSize-l' color='white'> ( 尚 缺 <font class='fontSize-l' color='lime'><b>{1}</b></font> 人 )</font></b>";
+    public string HudHtml_Prep2v2_Line2 { get; set; } = "<font class='fontSize-l' color='gray'>進度： </font><font class='fontSize-l' color='lime'>{0} / {2}</font><font class='fontSize-l' color='gray'> ( 尚缺 {1} 人 )</font>";
 
     [JsonPropertyName("HudHtml_Prep3v3_Line1")] 
-    public string HudHtml_Prep3v3_Line1 { get; set; } = "<font class='fontSize-l' color='lime'><b>✦</font> <font class='fontSize-l' color='white'>人 數 觸 發 <font class='fontSize-l' color='gold'>3 v 3</font> 團 戰 </font><font class='fontSize-l' color='lime'>✦</font></b>";
+    public string HudHtml_Prep3v3_Line1 { get; set; } = "<font class='fontSize-l' color='white'>✦ 觸 發 3 v 3 大 亂 鬥 ✦</font>";
     
     [JsonPropertyName("HudHtml_Prep3v3_Line2")] 
-    public string HudHtml_Prep3v3_Line2 { get; set; } = "<font class='fontSize-l' color='red'><b>進 度： </font><font class='fontSize-l' color='lime'>{0} / {2}</font><font class='fontSize-l' color='white'> ( 尚 缺 <font class='fontSize-l' color='lime'><b>{1}</b></font> 人 )</font></b>";
+    public string HudHtml_Prep3v3_Line2 { get; set; } = "<font class='fontSize-l' color='gray'>進度： </font><font class='fontSize-l' color='lime'>{0} / {2}</font><font class='fontSize-l' color='gray'> ( 尚缺 {1} 人 )</font>";
     
     [JsonPropertyName("HudHtml_MatchAbort_Line1")] 
-    public string HudHtml_MatchAbort_Line1 { get; set; } = "<font class='fontSize-l' color='gold'><b>有 玩 家 逃 跑 ， 戰 鬥 已 終 止</font></b>";
+    public string HudHtml_MatchAbort_Line1 { get; set; } = "<font class='fontSize-l' color='red'>[ 警 告 ] 玩 家 逃 跑 ， 戰 鬥 終 止</font>";
 
     [JsonPropertyName("HudHtml_MatchAbort_Line2")] 
-    public string HudHtml_MatchAbort_Line2 { get; set; } = "<font class='fontSize-l' color='lime'><b>比 賽 已 退 回 暖 身 模 式</font></b>";
+    public string HudHtml_MatchAbort_Line2 { get; set; } = "<font class='fontSize-l' color='white'>已 退 回 暖 身 模 式</font>";
 
     [JsonPropertyName("HudHtml_Round1_Line1")] 
-    public string HudHtml_Round1_Line1 { get; set; } = "<font class='fontSize-l' color='gold'><b>★ 狙 擊 戰 鬥 開 始 ★</font></b>";
+    public string HudHtml_Round1_Line1 { get; set; } = "<font class='fontSize-l' color='gold'>✦ 戰 鬥 開 始 ✦</font>";
 
     [JsonPropertyName("HudHtml_Round1_Line2")] 
-    public string HudHtml_Round1_Line2 { get; set; } = "<font class='fontSize-l' color='white'><b>對 戰 採</font><font class='fontSize-l' color='lime'><b>２０</b></font><font class='fontSize-l' color='white'> 回 合 勝 利 制</font></b>";
+    public string HudHtml_Round1_Line2 { get; set; } = "<font class='fontSize-l' color='white'>率 先 取 得 </font><font class='fontSize-xxl' color='lime'><b>２０</b></font><font class='fontSize-xxl' color='white'> 勝 者 為 贏 家</font>";
 }
 
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.59_TrueJSONSync";
+    public override string ModuleVersion => "8.53_StrictLiveMatch_WithSeconds";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "完美同步玩家原有的JSON秒數設定";
+    public override string ModuleDescription => "1v1~3v3 完全版，修復比賽中途偷渡客問題 (加入秒數設定)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -102,35 +103,41 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _liveTimer; 
 
-    private string _activeCenterMessage = "";
-    private float _centerMessageExpiration = 0f;
+    private CCSGameRules? _gameRules;
+    private bool _gameRulesInitialized;
 
-    // 接收專屬秒數的高頻渲染函數
-    private void ShowHud(string html, float durationInSeconds)
+    private void InitializeGameRules()
     {
-        _activeCenterMessage = html;
-        _centerMessageExpiration = Server.CurrentTime + durationInSeconds;
+        if (_gameRulesInitialized) return;
+        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
+        _gameRules = gameRulesProxy?.GameRules;
+        _gameRulesInitialized = _gameRules != null;
+    }
+
+    // ✅ 修改這裡：加上時間參數，並加入計時器自動清除黑框
+    private void ShowHud(string html, float duration)
+    {
+        foreach (var p in Utilities.GetPlayers())
+        {
+            if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
+        }
+        
+        AddTimer(duration, () => 
+        {
+            foreach (var p in Utilities.GetPlayers())
+            {
+                if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml("");
+            }
+        });
     }
 
     private void OnTick()
     {
-        // 絕對不閃爍的黑框刷新防護
-        if (!string.IsNullOrEmpty(_activeCenterMessage))
+        if (!_gameRulesInitialized) InitializeGameRules();
+
+        if (_gameRules != null)
         {
-            if (Server.CurrentTime <= _centerMessageExpiration)
-            {
-                foreach (var p in Utilities.GetPlayers())
-                {
-                    if (p != null && p.IsValid && !p.IsBot)
-                    {
-                        p.PrintToCenterHtml(_activeCenterMessage);
-                    }
-                }
-            }
-            else
-            {
-                _activeCenterMessage = ""; 
-            }
+            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
         }
 
         if (_pendingInitialReminders.Count > 0)
@@ -191,7 +198,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.59 (JSON記憶找回版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.53 (終極防護正式版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -274,6 +281,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     {
                         if (!_readyPlayers.Contains(steamId))
                         {
+                            // 鎖定即時賽局人數，不看設定檔最大值，看目前比賽規模
                             int liveTeamMax = _liveMatchTargetPlayers / 2;
                             int currentCount = 0;
                             foreach (var p in Utilities.GetPlayers())
@@ -294,6 +302,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                             }
                             else
                             {
+                                // 允許補位救援
                                 _readyPlayers.Add(steamId);
                             }
                         }
@@ -309,12 +318,20 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         RegisterListener<Listeners.OnMapStart>(mapName => 
         {
+            _gameRules = null;
+            _gameRulesInitialized = false;
+
             ResetMatchState();
             Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
             Server.NextFrame(() => {
                 Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
             });
         });
+
+        if (hotReload)
+        {
+            InitializeGameRules();
+        }
     }
 
     private int GetDynamicRequiredPlayers()
@@ -368,8 +385,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveTimer?.Kill();
         _liveTimer = null;
 
-        // ✅ 套用你 JSON 裡的 HudDuration_Abort (逃跑終止 5 秒)
-        ShowHud($"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}", Config.HudDuration_Abort);
+        // ✅ 套用 HudDuration_Abort 
+        ShowHud($"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}<br>", Config.HudDuration_Abort);
 
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}玩 家 離 退 對 戰 終 止，請 重 新 輸 入 {ChatColors.Lime}!R {ChatColors.Orange}對 戰");
         Server.ExecuteCommand("mp_warmup_start");
@@ -400,6 +417,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
                 if (!_readyPlayers.Contains(player.SteamID))
                 {
+                    // 鎖定即時賽局人數
                     int liveTeamMax = _liveMatchTargetPlayers / 2;
                     int currentTeamCount = 0;
                     foreach (var p in Utilities.GetPlayers())
@@ -418,7 +436,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     }
                 }
             }
-            else
+            else // 暖身期間，使用設定檔最大值
             {
                 int currentTeamCount = 0;
                 foreach (var p in Utilities.GetPlayers())
@@ -537,18 +555,18 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         string prepString = "";
         if (targetPlayers <= 2)
         {
-            prepString = $"{Config.HudHtml_Prep1v1_Line1}<br>{string.Format(Config.HudHtml_Prep1v1_Line2, _readyPlayers.Count, missingPlayers)}";
+            prepString = $"{Config.HudHtml_Prep1v1_Line1}<br>{string.Format(Config.HudHtml_Prep1v1_Line2, _readyPlayers.Count, missingPlayers)}<br>";
         }
         else if (targetPlayers <= 4)
         {
-            prepString = $"{Config.HudHtml_Prep2v2_Line1}<br>{string.Format(Config.HudHtml_Prep2v2_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}";
+            prepString = $"{Config.HudHtml_Prep2v2_Line1}<br>{string.Format(Config.HudHtml_Prep2v2_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
         }
         else 
         {
-            prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}";
+            prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
         }
 
-        // ✅ 套用你 JSON 裡的 HudDuration_Prep (準備進度 5 秒)
+        // ✅ 套用 HudDuration_Prep
         ShowHud(prepString, Config.HudDuration_Prep);
 
         CheckMatchStart();
@@ -589,18 +607,18 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             string prepString = "";
             if (targetPlayers <= 2)
             {
-                prepString = $"{Config.HudHtml_Prep1v1_Line1}<br>{string.Format(Config.HudHtml_Prep1v1_Line2, _readyPlayers.Count, missingPlayers)}";
+                prepString = $"{Config.HudHtml_Prep1v1_Line1}<br>{string.Format(Config.HudHtml_Prep1v1_Line2, _readyPlayers.Count, missingPlayers)}<br>";
             }
             else if (targetPlayers <= 4)
             {
-                prepString = $"{Config.HudHtml_Prep2v2_Line1}<br>{string.Format(Config.HudHtml_Prep2v2_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}";
+                prepString = $"{Config.HudHtml_Prep2v2_Line1}<br>{string.Format(Config.HudHtml_Prep2v2_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
             }
             else 
             {
-                prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}";
+                prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
             }
 
-            // ✅ 取消準備時一樣套用 HudDuration_Prep (準備進度 5 秒)
+            // ✅ 套用 HudDuration_Prep
             ShowHud(prepString, Config.HudDuration_Prep);
         }
     }
@@ -631,9 +649,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
-            string hudStartText = $"{Config.HudHtml_Round1_Line1}<br>{Config.HudHtml_Round1_Line2}";
+            string hudStartText = $"{Config.HudHtml_Round1_Line1}<br>{Config.HudHtml_Round1_Line2}<br>";
             
-            // ✅ 套用你 JSON 裡的 HudDuration_Round1 (戰鬥開始 3 秒)
+            // ✅ 套用 HudDuration_Round1
             ShowHud(hudStartText, Config.HudDuration_Round1);
 
             Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 家 已 準 備，{modeText} 比 賽 開 始");
@@ -646,10 +664,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _waitingTimer?.Kill();
             _waitingTimer = null;
             
+            // ✅ 套用 HudDuration_Start
             Console.WriteLine($"[LiteMatch] [MatchLive] 雙方準備就緒 ({modeText})！將於 {Config.HudDuration_Start} 秒後執行開賽設定檔：{Config.LiveConfigName}");
             _liveTimer?.Kill();
-            
-            // ✅ 這裡連開賽等待時間，我都幫你套用你 JSON 裡的 HudDuration_Start (4 秒)
             _liveTimer = AddTimer(Config.HudDuration_Start, () => 
             {
                 Server.NextFrame(() => { Server.ExecuteCommand($"exec {Config.LiveConfigName}"); });
@@ -887,9 +904,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         _pendingInitialReminders.Clear();
         _hasReceivedInitialReminder.Clear();
-        
-        _activeCenterMessage = "";
-        _centerMessageExpiration = 0f;
 
         _liveTimer?.Kill();
         _liveTimer = null;

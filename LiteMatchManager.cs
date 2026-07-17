@@ -67,9 +67,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.47_Fix4Sec";
+    public override string ModuleVersion => "8.41_Clean";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "基於 LiteMatchManager_3 增加 5 秒初次無計時器提示，並修正為 4 秒開賽";
+    public override string ModuleDescription => "移除冗餘文字，純淨 HTML 延遲 3 秒執行 live.cfg";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -79,10 +79,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private List<string> _unreadyNamesCache = new(64); 
     private Dictionary<ulong, string> _playerPrimary = new(64);
     
-    // 【新增】：用於 OnTick 的 5 秒無計時器追蹤
-    private Dictionary<ulong, float> _pendingInitialReminders = new(64);
-    private HashSet<ulong> _hasReceivedInitialReminder = new(64);
-
     private bool _isMatchLive = false;
     private bool _isChangingMap = false; 
     private bool _isFirstRound = false; 
@@ -92,7 +88,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
 
-    // 負責倒數 4 秒執行 live.cfg 的計時器
+    // 負責倒數 3 秒執行 live.cfg 的計時器
     private CounterStrikeSharp.API.Modules.Timers.Timer? _liveTimer; 
 
     private CCSGameRules? _gameRules;
@@ -123,48 +119,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
         }
-
-        // 【新增】：無計時器：利用伺服器心跳 (OnTick) 精準觸發 5 秒提示
-        if (_pendingInitialReminders.Count > 0)
-        {
-            float currentTime = Server.CurrentTime;
-            List<ulong>? toRemove = null;
-
-            foreach (var kvp in _pendingInitialReminders)
-            {
-                if (currentTime >= kvp.Value)
-                {
-                    ulong steamId = kvp.Key;
-                    toRemove ??= new List<ulong>();
-                    toRemove.Add(steamId);
-
-                    // 檢查玩家是否仍在暖身中、尚未準備
-                    if (!_isMatchLive && !_readyPlayers.Contains(steamId))
-                    {
-                        foreach (var p in Utilities.GetPlayers())
-                        {
-                            if (p != null && p.IsValid && p.SteamID == steamId && (p.TeamNum == 2 || p.TeamNum == 3))
-                            {
-                                int elapsed = 0;
-                                if (_playerUnreadyTime.TryGetValue(steamId, out int val)) elapsed = val;
-                                int timeLeft = Config.KickUnreadyPlayerTime - elapsed;
-                                
-                                p.PrintToChat($" {_cachedPrefix} 請輸入 {ChatColors.Lime}!R{ChatColors.White} 準備 ，{ChatColors.Lime}{timeLeft}{ChatColors.White} 秒未準備將被踢出");
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (toRemove != null)
-            {
-                foreach (var id in toRemove)
-                {
-                    _pendingInitialReminders.Remove(id);
-                }
-            }
-        }
     }
 
     public void OnConfigParsed(LiteMatchConfig config)
@@ -184,7 +138,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.47 (4秒開局修正版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.41 (極簡延遲版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -211,10 +165,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         _readyPlayers.Remove(steamId);
                         _playerUnreadyTime.Remove(steamId);
                         _playerPrimary.Remove(steamId);
-                        
-                        // 【新增】：清除 5 秒提示記錄
-                        _pendingInitialReminders.Remove(steamId);
-                        _hasReceivedInitialReminder.Remove(steamId);
 
                         if (_isMatchLive) 
                         {
@@ -243,10 +193,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 
                 if (newTeam == 0 || newTeam == 1) 
                 {
-                    // 【新增】：玩家退到觀戰，清除提示標記，下次重進 T/CT 才能再次觸發 5 秒倒數
-                    _pendingInitialReminders.Remove(steamId);
-                    _hasReceivedInitialReminder.Remove(steamId);
-
                     if (_readyPlayers.Contains(steamId))
                     {
                         _readyPlayers.Remove(steamId);
@@ -521,9 +467,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _readyPlayers.Add(steamId);
         _playerUnreadyTime.Remove(steamId); 
         
-        // 【新增】：玩家已準備，立刻取消 5 秒的提示倒數
-        _pendingInitialReminders.Remove(steamId); 
-
         int targetPlayers = GetDynamicRequiredPlayers();
         int missingPlayers = targetPlayers - _readyPlayers.Count;
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 已 準 備！準 備 進 度：{ChatColors.Green}{_readyPlayers.Count} / {targetPlayers}");
@@ -617,7 +560,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _waitingTimer?.Kill();
             _waitingTimer = null;
             
-            // 【最核心的 4 秒緩衝】：等玩家安穩看完上方的 HUD 4 秒鐘，才執行 live.cfg 讓地圖重啟開打！
+            // 【最核心的 3 秒緩衝】：等玩家安穩看完上方的 HUD 3 秒鐘，才執行 live.cfg 讓地圖重啟開打！
             Console.WriteLine($"[LiteMatch] [MatchLive] 雙方準備就緒 ({modeText})！將於 4 秒後執行開賽設定檔：{Config.LiveConfigName}");
             _liveTimer?.Kill();
             _liveTimer = AddTimer(4.0f, () => 
@@ -634,16 +577,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         if (player == null || !player.IsValid) return HookResult.Continue;
         
         ulong steamId = player.SteamID;
-
-        // 【新增】：如果在暖身階段且剛重生到 T/CT 隊伍，觸發 5 秒無計時器提示
-        if (!_isMatchLive && (player.TeamNum == 2 || player.TeamNum == 3))
-        {
-            if (!_readyPlayers.Contains(steamId) && !_hasReceivedInitialReminder.Contains(steamId))
-            {
-                _pendingInitialReminders[steamId] = Server.CurrentTime + 5.0f;
-                _hasReceivedInitialReminder.Add(steamId);
-            }
-        }
 
         if (_isMatchLive && (player.TeamNum == 2 || player.TeamNum == 3))
         {
@@ -852,10 +785,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveMatchTargetPlayers = 0; 
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
-
-        // 【新增】：重置 5 秒提示狀態，換地圖後進來能再提示
-        _pendingInitialReminders.Clear();
-        _hasReceivedInitialReminder.Clear();
 
         _liveTimer?.Kill();
         _liveTimer = null;

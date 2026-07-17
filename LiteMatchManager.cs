@@ -67,9 +67,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.48_CleanWarning";
+    public override string ModuleVersion => "8.50_VisibleCommands";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "移除無用變數，修正編譯警告";
+    public override string ModuleDescription => "修正重複訊息，維持指令可見";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -183,13 +183,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.48 (清理編譯警告版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.50 (指令可見版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
         AddCommandListener("say_team", OnPlayerSay);
         AddCommandListener("jointeam", OnJoinTeam);
-        AddCommand("css_gs", "顯示武器選單提示", OnGsCommand);
+        
+        // 維持移除 AddCommand("css_gs")，避免訊息發送兩次
         
         AddCommandListener("drop", (player, info) => {
             return HookResult.Handled;
@@ -460,6 +461,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             return HookResult.Handled;
         }
 
+        // 改回 Continue，讓大家看到他打指令
         if (command == "!r" || command == "!ready")
         {
             if (!_isMatchLive) HandlePlayerReady(player);
@@ -471,7 +473,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             return HookResult.Continue; 
         }
 
-        if (Config.EnableChatWeaponCommands && HandleWeaponCommand(player, command)) return HookResult.Continue; 
+        if (Config.EnableChatWeaponCommands && HandleWeaponCommand(player, command)) 
+        {
+            return HookResult.Continue; 
+        }
+        
         return HookResult.Continue;
     }
 
@@ -725,6 +731,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     {
         if (player is null || !player.IsValid) return;
         player.PrintToChat($" {ChatColors.Orange} 已 禁 用 所 有 小 槍 、請 在 聊 天 欄 位 輸 入 您 要 的 武 器");
+        player.PrintToChat($" ----------------------------------------------------------------------");
         player.PrintToChat($" [ {ChatColors.Green}狙擊{ChatColors.White} ] {ChatColors.Green}!SSG {ChatColors.White}[ SSG 08 鳥狙 ] 、{ChatColors.Green}!AWP {ChatColors.White}[ AWP狙擊步槍 ]");
     }
 
@@ -784,7 +791,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
             if (totalPlayers == 1)
             {
-                modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}場 上 {ChatColors.Green}1 {ChatColors.White}人，等 對 手 加 入 {ChatColors.Green}1 v 1 {ChatColors.White}或 {ChatColors.Green}2 v 2 {ChatColors.White}對 戰";
+                modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}場 上 {ChatColors.Green}1 {ChatColors.White}人，等 對 手 加 加 入 {ChatColors.Green}1 v 1 {ChatColors.White}或 {ChatColors.Green}2 v 2 {ChatColors.White}對 戰";
             }
             else
             {

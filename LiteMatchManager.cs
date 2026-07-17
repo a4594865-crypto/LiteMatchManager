@@ -73,9 +73,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.53_StrictLiveMatch";
+    public override string ModuleVersion => "8.55_CleanHUD";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "1v1~3v3 完全版，修復比賽中途偷渡客問題";
+    public override string ModuleDescription => "1v1~3v3 完全版，修復官方HUD消失與防偷渡問題";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -118,13 +118,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
     private void OnTick()
     {
-        if (!_gameRulesInitialized) InitializeGameRules();
-
-        if (_gameRules != null)
-        {
-            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
-        }
-
         if (_pendingInitialReminders.Count > 0)
         {
             float currentTime = Server.CurrentTime;
@@ -183,7 +176,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.53 (終極防護正式版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.55 (完美UI定案版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -266,7 +259,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     {
                         if (!_readyPlayers.Contains(steamId))
                         {
-                            // 鎖定即時賽局人數，不看設定檔最大值，看目前比賽規模
                             int liveTeamMax = _liveMatchTargetPlayers / 2;
                             int currentCount = 0;
                             foreach (var p in Utilities.GetPlayers())
@@ -287,7 +279,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                             }
                             else
                             {
-                                // 允許補位救援
                                 _readyPlayers.Add(steamId);
                             }
                         }
@@ -401,7 +392,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
                 if (!_readyPlayers.Contains(player.SteamID))
                 {
-                    // 鎖定即時賽局人數
                     int liveTeamMax = _liveMatchTargetPlayers / 2;
                     int currentTeamCount = 0;
                     foreach (var p in Utilities.GetPlayers())

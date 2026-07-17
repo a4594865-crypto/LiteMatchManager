@@ -36,12 +36,6 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("LiveConfigName")] public string LiveConfigName { get; set; } = "live.cfg";
     [JsonPropertyName("Duel_MapChangeDelay")] public int MapChangeDelay { get; set; } = 5;
     
-    // ✅ 保留你的設定變數，但不再去干涉官方黑框的淡出機制
-    [JsonPropertyName("HudDuration_Prep")] public float HudDuration_Prep { get; set; } = 5.0f;
-    [JsonPropertyName("HudDuration_Start")] public float HudDuration_Start { get; set; } = 4.0f;
-    [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 5.0f;
-    [JsonPropertyName("HudDuration_Round1")] public float HudDuration_Round1 { get; set; } = 3.0f;
-
     [JsonPropertyName("MapList")] 
     public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
 
@@ -79,9 +73,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.53_Clean_NoGhostBox";
+    public override string ModuleVersion => "8.53_StrictLiveMatch";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "1v1~3v3 完全版，修復遮擋框殘留問題";
+    public override string ModuleDescription => "1v1~3v3 完全版，修復比賽中途偷渡客問題";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -114,7 +108,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _gameRulesInitialized = _gameRules != null;
     }
 
-    // ✅ 回歸最乾淨的原生寫法：徹底刪除造成幽靈黑框的 "" 計時器
     private void ShowHud(string html)
     {
         foreach (var p in Utilities.GetPlayers())
@@ -190,7 +183,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.53 (修復遮擋殘留) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.53 (終極防護正式版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -273,6 +266,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     {
                         if (!_readyPlayers.Contains(steamId))
                         {
+                            // 鎖定即時賽局人數，不看設定檔最大值，看目前比賽規模
                             int liveTeamMax = _liveMatchTargetPlayers / 2;
                             int currentCount = 0;
                             foreach (var p in Utilities.GetPlayers())
@@ -293,6 +287,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                             }
                             else
                             {
+                                // 允許補位救援
                                 _readyPlayers.Add(steamId);
                             }
                         }
@@ -406,6 +401,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
                 if (!_readyPlayers.Contains(player.SteamID))
                 {
+                    // 鎖定即時賽局人數
                     int liveTeamMax = _liveMatchTargetPlayers / 2;
                     int currentTeamCount = 0;
                     foreach (var p in Utilities.GetPlayers())
@@ -424,7 +420,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     }
                 }
             }
-            else 
+            else // 暖身期間，使用設定檔最大值
             {
                 int currentTeamCount = 0;
                 foreach (var p in Utilities.GetPlayers())
@@ -648,10 +644,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _waitingTimer?.Kill();
             _waitingTimer = null;
             
-            // ✅ 將你設定的 HudDuration_Start (開賽等待秒數) 完美綁定到這裡的執行延遲上！
-            Console.WriteLine($"[LiteMatch] [MatchLive] 雙方準備就緒 ({modeText})！將於 {Config.HudDuration_Start} 秒後執行開賽設定檔：{Config.LiveConfigName}");
+            Console.WriteLine($"[LiteMatch] [MatchLive] 雙方準備就緒 ({modeText})！將於 4 秒後執行開賽設定檔：{Config.LiveConfigName}");
             _liveTimer?.Kill();
-            _liveTimer = AddTimer(Config.HudDuration_Start, () => 
+            _liveTimer = AddTimer(4.0f, () => 
             {
                 Server.NextFrame(() => { Server.ExecuteCommand($"exec {Config.LiveConfigName}"); });
                 _liveTimer = null;

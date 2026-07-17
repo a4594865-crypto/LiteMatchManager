@@ -667,7 +667,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             
             Console.WriteLine($"[LiteMatch] [MatchLive] 雙方準備就緒 ({modeText})！將於 4 秒後執行開賽設定檔：{Config.LiveConfigName}");
             _liveTimer?.Kill();
-            _liveTimer = AddTimer(5.0f, () => 
+            _liveTimer = AddTimer(4.0f, () => 
             {
                 Server.NextFrame(() => { Server.ExecuteCommand($"exec {Config.LiveConfigName}"); });
                 _liveTimer = null;

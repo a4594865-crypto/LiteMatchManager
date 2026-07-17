@@ -17,8 +17,7 @@ namespace LiteMatchManager;
 
 public class LiteMatchConfig : BasePluginConfig
 {
-    [JsonPropertyName("MinPlayersToStart")] public int MinPlayersToStart { get; set; } = 6;
-    // 將預設最大人數改為 3，這樣才能支援到 3v3
+    [JsonPropertyName("MinPlayersToStart")] public int MinPlayersToStart { get; set; } = 4;
     [JsonPropertyName("MaxPlayersPerTeam")] public int MaxPlayersPerTeam { get; set; } = 3; 
     [JsonPropertyName("KickUnreadyPlayerTime")] public int KickUnreadyPlayerTime { get; set; } = 360;
     
@@ -52,7 +51,6 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("HudHtml_Prep2v2_Line2")] 
     public string HudHtml_Prep2v2_Line2 { get; set; } = "<font class='fontSize-l' color='gray'>進度： </font><font class='fontSize-l' color='lime'>{0} / {2}</font><font class='fontSize-l' color='gray'> ( 尚缺 {1} 人 )</font>";
 
-    // 【新增】3v3 專用的 HUD 訊息設定
     [JsonPropertyName("HudHtml_Prep3v3_Line1")] 
     public string HudHtml_Prep3v3_Line1 { get; set; } = "<font class='fontSize-l' color='white'>✦ 觸 發 3 v 3 大 亂 鬥 ✦</font>";
     
@@ -60,7 +58,7 @@ public class LiteMatchConfig : BasePluginConfig
     public string HudHtml_Prep3v3_Line2 { get; set; } = "<font class='fontSize-l' color='gray'>進度： </font><font class='fontSize-l' color='lime'>{0} / {2}</font><font class='fontSize-l' color='gray'> ( 尚缺 {1} 人 )</font>";
     
     [JsonPropertyName("HudHtml_MatchAbort_Line1")] 
-    public string HudHtml_MatchAbort_Line1 { get; set; } = "<font class='fontSize-l' color='white'>[ <font class='fontSize-l' color='red'>警 告</font> ]</font> <font class='fontSize-l' color='gold'玩 家 逃 跑 ， 戰 鬥 終 止</font>";
+    public string HudHtml_MatchAbort_Line1 { get; set; } = "<font class='fontSize-l' color='red'>[ 警 告 ] 玩 家 逃 跑 ， 戰 鬥 終 止</font>";
 
     [JsonPropertyName("HudHtml_MatchAbort_Line2")] 
     public string HudHtml_MatchAbort_Line2 { get; set; } = "<font class='fontSize-l' color='white'>已 退 回 暖 身 模 式</font>";
@@ -75,9 +73,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.52_Add3v3Support";
+    public override string ModuleVersion => "8.53_StrictLiveMatch";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "新增獨立的 3v3 介面支援與動態人數系統";
+    public override string ModuleDescription => "1v1~3v3 完全版，修復比賽中途偷渡客問題";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -185,7 +183,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.52 (1v1~3v3 完全版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.53 (終極防護正式版) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -266,17 +264,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 {
                     if (newTeam == 2 || newTeam == 3)
                     {
-                        if (_liveMatchTargetPlayers == 2 && !_readyPlayers.Contains(steamId))
+                        if (!_readyPlayers.Contains(steamId))
                         {
-                            Server.NextFrame(() => {
-                                if (player.IsValid) {
-                                    player.ChangeTeam(CsTeam.Spectator);
-                                    player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}單 挑 已 開 始，無 法 中 途 加 入！已 移 至 觀 戰。");
-                                }
-                            });
-                        }
-                        else if (_liveMatchTargetPlayers > 2 && !_readyPlayers.Contains(steamId))
-                        {
+                            // 鎖定即時賽局人數，不看設定檔最大值，看目前比賽規模
+                            int liveTeamMax = _liveMatchTargetPlayers / 2;
                             int currentCount = 0;
                             foreach (var p in Utilities.GetPlayers())
                             {
@@ -284,17 +275,19 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                                     currentCount++;
                             }
                             
-                            if (currentCount >= Config.MaxPlayersPerTeam)
+                            if (currentCount >= liveTeamMax)
                             {
                                 Server.NextFrame(() => {
                                     if (player.IsValid) {
                                         player.ChangeTeam(CsTeam.Spectator);
-                                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}該 隊 伍 已 滿 員，已 移 至 觀 戰。");
+                                        string modeText = _liveMatchTargetPlayers == 2 ? "單 挑" : "團 戰";
+                                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}{modeText} 已 開 始，無 法 中 途 加 入");
                                     }
                                 });
                             }
                             else
                             {
+                                // 允許補位救援
                                 _readyPlayers.Add(steamId);
                             }
                         }
@@ -326,7 +319,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
     }
 
-    // 【核心邏輯】動態計算需要幾人 (奇數自動進位雙數)
     private int GetDynamicRequiredPlayers()
     {
         int activeT = 0;
@@ -342,7 +334,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         int total = activeT + activeCT;
         if (total <= 2) return 2;
         
-        // 人數若是奇數(如3或5)，目標人數自動+1
         int target = (total % 2 == 1) ? total + 1 : total;
         
         int absoluteMax = Config.MaxPlayersPerTeam * 2;
@@ -402,42 +393,49 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             if (_isMatchLive)
             {
-                if (_liveMatchTargetPlayers == 2)
+                if (_readyPlayers.Contains(player.SteamID) && player.TeamNum >= 2)
                 {
-                    if (!_readyPlayers.Contains(player.SteamID))
-                    {
-                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}單 挑 已 經 開 始，無 法 中 途 加 入！請 觀 戰");
-                        return HookResult.Handled;
-                    }
-                    else
-                    {
-                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}對 戰 進 行 中，無 法 切 換 隊 伍！");
-                        return HookResult.Handled;
-                    }
+                    player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}對 戰 進 行 中，無 法 切 換 隊 伍！");
+                    return HookResult.Handled;
                 }
-                else
-                {
-                    if (_readyPlayers.Contains(player.SteamID) && player.TeamNum >= 2)
-                    {
-                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}對 戰 進 行 中，無 法 切 換 隊 伍！");
-                        return HookResult.Handled;
-                    }
-                }
-            }
 
-            int currentTeamCount = 0;
-            foreach (var p in Utilities.GetPlayers())
-            {
-                if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && p.TeamNum == teamIndex && p.SteamID != player.SteamID)
+                if (!_readyPlayers.Contains(player.SteamID))
                 {
-                    currentTeamCount++;
+                    // 鎖定即時賽局人數
+                    int liveTeamMax = _liveMatchTargetPlayers / 2;
+                    int currentTeamCount = 0;
+                    foreach (var p in Utilities.GetPlayers())
+                    {
+                        if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && p.TeamNum == teamIndex && p.SteamID != player.SteamID)
+                        {
+                            currentTeamCount++;
+                        }
+                    }
+                    
+                    if (currentTeamCount >= liveTeamMax)
+                    {
+                        string modeText = _liveMatchTargetPlayers == 2 ? "單 挑" : "比 賽";
+                        player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}{modeText} 已 開 始 且 隊 伍 滿 員，請 先 觀 戰！");
+                        return HookResult.Handled;
+                    }
                 }
             }
-            if (currentTeamCount >= Config.MaxPlayersPerTeam)
+            else // 暖身期間，使用設定檔最大值
             {
-                string teamName = teamIndex == 2 ? "恐怖份子 (T)" : "反恐小組 (CT)";
-                player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}加 入 失 敗！{teamName} 已 經 滿 員 ( 最 多 {ChatColors.Green}{Config.MaxPlayersPerTeam}{ChatColors.Orange} 人 )");
-                return HookResult.Handled; 
+                int currentTeamCount = 0;
+                foreach (var p in Utilities.GetPlayers())
+                {
+                    if (p != null && p.IsValid && p.Handle != IntPtr.Zero && !p.IsBot && p.TeamNum == teamIndex && p.SteamID != player.SteamID)
+                    {
+                        currentTeamCount++;
+                    }
+                }
+                if (currentTeamCount >= Config.MaxPlayersPerTeam)
+                {
+                    string teamName = teamIndex == 2 ? "恐怖份子 (T)" : "反恐小組 (CT)";
+                    player.PrintToChat($" {_cachedPrefix} {ChatColors.Orange}加 入 失 敗！{teamName} 已 經 滿 員 ( 最 多 {ChatColors.Green}{Config.MaxPlayersPerTeam}{ChatColors.Orange} 人 )");
+                    return HookResult.Handled; 
+                }
             }
         }
         return HookResult.Continue;
@@ -531,13 +529,13 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         _readyPlayers.Add(steamId);
         _playerUnreadyTime.Remove(steamId); 
+        
         _pendingInitialReminders.Remove(steamId); 
 
         int targetPlayers = GetDynamicRequiredPlayers();
         int missingPlayers = targetPlayers - _readyPlayers.Count;
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 已 準 備！準 備 進 度：{ChatColors.Green}{_readyPlayers.Count} / {targetPlayers}");
         
-        // 【核心修改】三岔路口判斷，精準派發對應的獨立排版
         string prepString = "";
         if (targetPlayers <= 2)
         {
@@ -589,7 +587,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             int missingPlayers = targetPlayers - _readyPlayers.Count;
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Red}{player.PlayerName}{ChatColors.White} 取 消 了 準 備！準 備 進 度：{ChatColors.Green}{_readyPlayers.Count} / {targetPlayers}");
             
-            // 【核心修改】三岔路口判斷
             string prepString = "";
             if (targetPlayers <= 2)
             {
@@ -623,9 +620,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
         int totalPlayers = activeT + activeCT;
 
-        if (totalPlayers < 2) return; // 至少2人
-        if (activeT != activeCT) return; // 隊伍須平衡
-        if (activeT > Config.MaxPlayersPerTeam) return; // 不能超過最大限制
+        if (totalPlayers < 2) return; 
+        if (activeT != activeCT) return; 
+        if (activeT > Config.MaxPlayersPerTeam) return; 
 
         if (_readyPlayers.Count >= totalPlayers)
         {
@@ -859,7 +856,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 }
                 else if (totalPlayers > 2)
                 {
-                    modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}觸發團戰，需滿 {ChatColors.Green}{targetPlayers} {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}{teamSize} v {teamSize} 團戰{ChatColors.White}";
+                    modeHint = $" [ {ChatColors.Green}動 態 判 斷{ChatColors.White} ] {ChatColors.White}已觸發團戰，需滿 {ChatColors.Green}{targetPlayers} {ChatColors.White}人輸入 {ChatColors.Orange}!R {ChatColors.White}可開始 {ChatColors.Green}{teamSize} v {teamSize} 團戰{ChatColors.White}";
                 }
                 
                 if (_unreadyNamesCache.Count > 0)

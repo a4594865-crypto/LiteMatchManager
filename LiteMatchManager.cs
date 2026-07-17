@@ -36,7 +36,7 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("LiveConfigName")] public string LiveConfigName { get; set; } = "live.cfg";
     [JsonPropertyName("Duel_MapChangeDelay")] public int MapChangeDelay { get; set; } = 5;
     
-    //  4 個秒數設定
+    // ✅ 保留你的設定變數，但不再去干涉官方黑框的淡出機制
     [JsonPropertyName("HudDuration_Prep")] public float HudDuration_Prep { get; set; } = 5.0f;
     [JsonPropertyName("HudDuration_Start")] public float HudDuration_Start { get; set; } = 4.0f;
     [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 5.0f;
@@ -79,9 +79,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.53_StrictLiveMatch_WithSeconds";
+    public override string ModuleVersion => "8.53_Clean_NoGhostBox";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "1v1~3v3 完全版，修復比賽中途偷渡客問題 (加入秒數設定)";
+    public override string ModuleDescription => "1v1~3v3 完全版，修復遮擋框殘留問題";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -114,21 +114,13 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _gameRulesInitialized = _gameRules != null;
     }
 
-    // ✅ 修改這裡：加上時間參數，並加入計時器自動清除黑框
-    private void ShowHud(string html, float duration)
+    // ✅ 回歸最乾淨的原生寫法：徹底刪除造成幽靈黑框的 "" 計時器
+    private void ShowHud(string html)
     {
         foreach (var p in Utilities.GetPlayers())
         {
             if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
         }
-        
-        AddTimer(duration, () => 
-        {
-            foreach (var p in Utilities.GetPlayers())
-            {
-                if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml("");
-            }
-        });
     }
 
     private void OnTick()
@@ -198,7 +190,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.53 (終極防護正式版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.53 (修復遮擋殘留) 啟動！");
         Console.WriteLine("=================================================");
 
         AddCommandListener("say", OnPlayerSay);
@@ -281,7 +273,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     {
                         if (!_readyPlayers.Contains(steamId))
                         {
-                            // 鎖定即時賽局人數，不看設定檔最大值，看目前比賽規模
                             int liveTeamMax = _liveMatchTargetPlayers / 2;
                             int currentCount = 0;
                             foreach (var p in Utilities.GetPlayers())
@@ -302,7 +293,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                             }
                             else
                             {
-                                // 允許補位救援
                                 _readyPlayers.Add(steamId);
                             }
                         }
@@ -385,8 +375,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveTimer?.Kill();
         _liveTimer = null;
 
-        // ✅ 套用 HudDuration_Abort 
-        ShowHud($"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}<br>", Config.HudDuration_Abort);
+        ShowHud($"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}<br>");
 
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}玩 家 離 退 對 戰 終 止，請 重 新 輸 入 {ChatColors.Lime}!R {ChatColors.Orange}對 戰");
         Server.ExecuteCommand("mp_warmup_start");
@@ -417,7 +406,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
                 if (!_readyPlayers.Contains(player.SteamID))
                 {
-                    // 鎖定即時賽局人數
                     int liveTeamMax = _liveMatchTargetPlayers / 2;
                     int currentTeamCount = 0;
                     foreach (var p in Utilities.GetPlayers())
@@ -436,7 +424,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     }
                 }
             }
-            else // 暖身期間，使用設定檔最大值
+            else 
             {
                 int currentTeamCount = 0;
                 foreach (var p in Utilities.GetPlayers())
@@ -566,8 +554,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
         }
 
-        // ✅ 套用 HudDuration_Prep
-        ShowHud(prepString, Config.HudDuration_Prep);
+        ShowHud(prepString);
 
         CheckMatchStart();
 
@@ -618,8 +605,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
             }
 
-            // ✅ 套用 HudDuration_Prep
-            ShowHud(prepString, Config.HudDuration_Prep);
+            ShowHud(prepString);
         }
     }
 
@@ -650,9 +636,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
             string hudStartText = $"{Config.HudHtml_Round1_Line1}<br>{Config.HudHtml_Round1_Line2}<br>";
-            
-            // ✅ 套用 HudDuration_Round1
-            ShowHud(hudStartText, Config.HudDuration_Round1);
+            ShowHud(hudStartText);
 
             Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 家 已 準 備，{modeText} 比 賽 開 始");
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}２０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
@@ -664,7 +648,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _waitingTimer?.Kill();
             _waitingTimer = null;
             
-            // ✅ 套用 HudDuration_Start
+            // ✅ 將你設定的 HudDuration_Start (開賽等待秒數) 完美綁定到這裡的執行延遲上！
             Console.WriteLine($"[LiteMatch] [MatchLive] 雙方準備就緒 ({modeText})！將於 {Config.HudDuration_Start} 秒後執行開賽設定檔：{Config.LiveConfigName}");
             _liveTimer?.Kill();
             _liveTimer = AddTimer(Config.HudDuration_Start, () => 

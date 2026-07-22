@@ -121,19 +121,20 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     {
         if (!_gameRulesInitialized) InitializeGameRules();
 
-        // 【修改區塊開始】
-        // 加入防護：只有在 RestartRoundTime > 0 (確實有在倒數) 時，才允許更新
-        if (_gameRules != null && _gameRules.RestartRoundTime > 0)
+        // 【修正後的邏輯】
+        if (_gameRules != null)
         {
-            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
-            
-            // 當觸發重啟 (True) 後，立刻把倒數時間歸零，防止下一秒繼續觸發 UI 洗頻
-            if (_gameRules.GameRestart)
+            // 如果時間大於 0 (表示系統真的有設定重啟倒數)
+            if (_gameRules.RestartRoundTime > 0)
             {
-                _gameRules.RestartRoundTime = 0; 
+                _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
+            }
+            // 如果沒有在倒數 (時間是 0)，就強制把 GameRestart 關閉，杜絕無限跳提示的 Bug
+            else
+            {
+                _gameRules.GameRestart = false;
             }
         }
-        // 【修改區塊結束】
 
         if (_pendingInitialReminders.Count > 0)
         {

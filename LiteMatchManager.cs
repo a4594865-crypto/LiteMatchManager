@@ -117,13 +117,17 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
     }
 
-    private void OnTick()
+   private void OnTick()
     {
         if (!_gameRulesInitialized) InitializeGameRules();
 
         if (_gameRules != null)
         {
-            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
+            // 【關鍵修改】加入 5 秒寬容值 (防卡圖機制保留，但不會每一回合干擾原廠正常交替)
+            if (_gameRules.RestartRoundTime > 0 && Server.CurrentTime > _gameRules.RestartRoundTime + 5.0f)
+            {
+                _gameRules.GameRestart = true;
+            }
         }
 
         if (_pendingInitialReminders.Count > 0)

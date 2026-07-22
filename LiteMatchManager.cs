@@ -121,18 +121,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     {
         if (!_gameRulesInitialized) InitializeGameRules();
 
-        // 【修正後的邏輯】
         if (_gameRules != null)
         {
-            // 如果時間大於 0 (表示系統真的有設定重啟倒數)
+            // 【終極解答】
+            // 只有在系統真正發布了倒數時間 (> 0) 時，我們才去判斷時間到了沒。
+            // 只要觸發重啟，CS2 引擎會自己接管後續的黑框動畫跟數值重置，我們「什麼都不要做」，才不會把動畫卡掉！
             if (_gameRules.RestartRoundTime > 0)
             {
                 _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
-            }
-            // 如果沒有在倒數 (時間是 0)，就強制把 GameRestart 關閉，杜絕無限跳提示的 Bug
-            else
-            {
-                _gameRules.GameRestart = false;
             }
         }
 

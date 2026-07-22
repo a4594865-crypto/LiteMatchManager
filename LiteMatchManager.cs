@@ -176,16 +176,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
     }
 
-            if (toRemove != null)
-            {
-                foreach (var id in toRemove)
-                {
-                    _pendingInitialReminders.Remove(id);
-                }
-            }
-        }
-    }
-
     public void OnConfigParsed(LiteMatchConfig config)
     {
         Config = config;

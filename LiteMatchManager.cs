@@ -123,13 +123,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         if (_gameRules != null)
         {
-            // 【終極解答】
-            // 只有在系統真正發布了倒數時間 (> 0) 時，我們才去判斷時間到了沒。
-            // 只要觸發重啟，CS2 引擎會自己接管後續的黑框動畫跟數值重置，我們「什麼都不要做」，才不會把動畫卡掉！
-            if (_gameRules.RestartRoundTime > 0)
-            {
-                _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
-            }
+            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
         }
 
         if (_pendingInitialReminders.Count > 0)

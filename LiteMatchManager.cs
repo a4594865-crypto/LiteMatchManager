@@ -117,18 +117,23 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
     }
 
-   private void OnTick()
+    private void OnTick()
     {
         if (!_gameRulesInitialized) InitializeGameRules();
 
-        if (_gameRules != null)
+        // 【修改區塊開始】
+        // 加入防護：只有在 RestartRoundTime > 0 (確實有在倒數) 時，才允許更新
+        if (_gameRules != null && _gameRules.RestartRoundTime > 0)
         {
-            // 【關鍵修改】加入 5 秒寬容值 (防卡圖機制保留，但不會每一回合干擾原廠正常交替)
-            if (_gameRules.RestartRoundTime > 0 && Server.CurrentTime > _gameRules.RestartRoundTime + 5.0f)
+            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
+            
+            // 當觸發重啟 (True) 後，立刻把倒數時間歸零，防止下一秒繼續觸發 UI 洗頻
+            if (_gameRules.GameRestart)
             {
-                _gameRules.GameRestart = true;
+                _gameRules.RestartRoundTime = 0; 
             }
         }
+        // 【修改區塊結束】
 
         if (_pendingInitialReminders.Count > 0)
         {
@@ -160,6 +165,16 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                     }
                 }
             }
+
+            if (toRemove != null)
+            {
+                foreach (var id in toRemove)
+                {
+                    _pendingInitialReminders.Remove(id);
+                }
+            }
+        }
+    }
 
             if (toRemove != null)
             {

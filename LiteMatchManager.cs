@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using System;
 using System.Linq;
+using System.Drawing; // 用於 3D 文字顏色設定
 
 namespace LiteMatchManager;
 
@@ -52,12 +53,15 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("HudDuration_Round1")] public float HudDuration_Round1 { get; set; } = 3.5f;
     [JsonPropertyName("Live_Execute_Delay")] public float Live_Execute_Delay { get; set; } = 4.0f;
 
-    // 純文字模式下，直接設為 1 (每滴答刷新)，完全壓制官方 HUD 且不會抖動
-    [JsonPropertyName("HudRefreshTicks")] public int HudRefreshTicks { get; set; } = 1;
+    // ==========================================
+    // 3D 空間文字 (PointWorldText) 專用設定
+    // ==========================================
+    [JsonPropertyName("Hud3D_Color_R")] public int Hud3D_Color_R { get; set; } = 255;
+    [JsonPropertyName("Hud3D_Color_G")] public int Hud3D_Color_G { get; set; } = 215; // 預設為金色
+    [JsonPropertyName("Hud3D_Color_B")] public int Hud3D_Color_B { get; set; } = 0;
+    [JsonPropertyName("Hud3D_FontSize")] public int Hud3D_FontSize { get; set; } = 32; // 自訂字體大小
+    [JsonPropertyName("Hud3D_Distance")] public float Hud3D_Distance { get; set; } = 7.0f; // 距離玩家多遠
 
-    // ==========================================
-    // 純文字版 HUD 參數 (移除了所有 HTML 標籤)
-    // ==========================================
     [JsonPropertyName("HudText_Prep1v1_Line1")] 
     public string HudText_Prep1v1_Line1 { get; set; } = "✦ 人 數 觸 發 1 v 1 單 挑 ✦";
     
@@ -92,9 +96,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.61_PlainText_Smooth";
+    public override string ModuleVersion => "8.63_PointWorldText_3D";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純 8.61 版 (純文字 PrintToCenter 模式，完美消除重繪抖動)";
+    public override string ModuleDescription => "純 8.63 版 (吸收 CS2_GameHUD 核心，內建 3D 空間靜態文字)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -117,8 +121,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _liveTimer; 
 
+    // 用來儲存每個玩家專屬的 3D 文字實體與剩餘顯示時間
+    private Dictionary<ulong, CPointWorldText> _playerWorldText = new(64);
     private Dictionary<ulong, int> _playerHudTicks = new(64);
-    private Dictionary<ulong, string> _playerHudText = new(64);
 
     private void ShowHud(string text, float displaySeconds = 3.0f)
     {
@@ -126,41 +131,90 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         foreach (var p in Utilities.GetPlayers())
         {
-            if (p != null && p.IsValid && !p.IsBot)
+            if (p != null && p.IsValid && !p.IsBot && p.PlayerPawn != null && p.PlayerPawn.Value != null)
             {
                 ulong steamId = p.SteamID;
-                _playerHudText[steamId] = text;        
-                _playerHudTicks[steamId] = totalTicks; 
-                
-                // 改用純文字發送，不經過 HTML 排版引擎
-                p.PrintToCenter(text);
+                _playerHudTicks[steamId] = totalTicks;
+
+                // 如果該玩家還沒有專屬的 3D 文字實體，就創建一個
+                if (!_playerWorldText.TryGetValue(steamId, out var worldText) || worldText == null || !worldText.IsValid)
+                {
+                    worldText = Utilities.CreateEntityByName<CPointWorldText>("point_worldtext");
+                    if (worldText != null)
+                    {
+                        worldText.FontSize = Config.Hud3D_FontSize;
+                        worldText.FontName = "Verdana";
+                        worldText.Enabled = true;
+                        worldText.Fullbright = true;
+                        worldText.WorldUnitsPerPx = 0.05f; 
+                        worldText.Color = Color.FromArgb(255, Config.Hud3D_Color_R, Config.Hud3D_Color_G, Config.Hud3D_Color_B);
+                        worldText.JustifyHorizontal = PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER;
+                        worldText.JustifyVertical = PointWorldTextJustifyVertical_t.POINT_WORLD_TEXT_JUSTIFY_VERTICAL_CENTER;
+                        worldText.ReorientMode = PointWorldTextReorientMode_t.POINT_WORLD_TEXT_REORIENT_NONE;
+                        
+                        worldText.DispatchSpawn();
+                        _playerWorldText[steamId] = worldText;
+                    }
+                }
+
+                if (worldText != null && worldText.IsValid)
+                {
+                    worldText.MessageText = text;
+                    worldText.AcceptInput("SetMessage", null, null, text);
+                }
             }
         }
     }
 
+    // 將玩家視角轉換為 3D 空間向量 (借鏡 API 寫法)
+    private static void AngleVectors(QAngle angles, out Vector forward, out Vector right, out Vector up)
+    {
+        (float sy, float cy) = MathF.SinCos(angles.Y * MathF.PI / 180.0f);
+        (float sp, float cp) = MathF.SinCos(angles.X * MathF.PI / 180.0f);
+
+        forward = new Vector(cp * cy, cp * sy, -sp);
+        right = new Vector(sy, -cy, 0);
+        up = new Vector(sp * cy, sp * sy, cp);
+    }
+
     private void OnTick()
     {
+        // 核心機制：每 Tick 把專屬的 3D 文字「傳送」到玩家眼前
         foreach (var p in Utilities.GetPlayers())
         {
-            if (p != null && p.IsValid && !p.IsBot)
+            if (p == null || !p.IsValid || p.IsBot) continue;
+            ulong steamId = p.SteamID;
+
+            if (_playerHudTicks.TryGetValue(steamId, out int ticksLeft) && ticksLeft > 0)
             {
-                ulong steamId = p.SteamID;
-                
-                if (_playerHudTicks.TryGetValue(steamId, out int ticksLeft) && ticksLeft > 0)
+                if (_playerWorldText.TryGetValue(steamId, out var worldText) && worldText != null && worldText.IsValid)
                 {
-                    if (ticksLeft % Config.HudRefreshTicks == 0)
+                    var pawn = p.PlayerPawn.Value;
+                    if (pawn != null && pawn.IsValid && pawn.AbsOrigin != null && pawn.V_angle != null)
                     {
-                        // 狂刷純文字，既能蓋過官方 HUD 又不抖動
-                        p.PrintToCenter(_playerHudText[steamId]);
+                        QAngle angles = pawn.V_angle;
+                        AngleVectors(angles, out Vector forward, out Vector right, out Vector up);
+
+                        Vector currentPos = new Vector(pawn.AbsOrigin.X, pawn.AbsOrigin.Y, pawn.AbsOrigin.Z);
+                        currentPos += forward * Config.Hud3D_Distance; // 往前推
+                        currentPos += new Vector(0, 0, pawn.ViewOffset.Z); // 加上眼睛高度
+
+                        QAngle currentAngle = new QAngle(0, angles.Y + 270, 90 - angles.X); // 面向玩家
+
+                        worldText.Teleport(currentPos, currentAngle, null);
                     }
+                }
 
-                    _playerHudTicks[steamId] = ticksLeft - 1;
+                _playerHudTicks[steamId] = ticksLeft - 1;
 
-                    if (ticksLeft - 1 == 0)
+                // 時間到，刪除 3D 實體，避免殘留
+                if (ticksLeft - 1 == 0)
+                {
+                    if (worldText != null && worldText.IsValid)
                     {
-                        // 用一個空白字元清空中央純文字框
-                        p.PrintToCenter(" ");
+                        worldText.Remove();
                     }
+                    _playerWorldText.Remove(steamId);
                 }
             }
         }
@@ -206,6 +260,25 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
     }
 
+    // 【最高機密】：攔截封包，確保每個玩家只會看到自己的 3D 文字，不會看到別人的！
+    private void OnTransmit(CCheckTransmitInfoList infoList)
+    {
+        foreach ((CCheckTransmitInfo info, CCSPlayerController? player) in infoList)
+        {
+            if (player == null || !player.IsValid) continue;
+            ulong mySteamId = player.SteamID;
+
+            foreach (var kvp in _playerWorldText)
+            {
+                // 如果這個 3D 文字不是屬於我的，就從我的顯示封包裡刪除它
+                if (kvp.Key != mySteamId && kvp.Value != null && kvp.Value.IsValid)
+                {
+                    info.TransmitEntities.Remove(kvp.Value.Index);
+                }
+            }
+        }
+    }
+
     public void OnConfigParsed(LiteMatchConfig config)
     {
         Config = config;
@@ -223,7 +296,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.61 (極致平滑純文字版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.63 (終極 3D 空間字體版) 啟動！");
         Console.WriteLine("=================================================");
 
         _isServerShuttingDown = false;
@@ -237,6 +310,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         });
         
         RegisterListener<Listeners.OnTick>(OnTick);
+        RegisterListener<Listeners.CheckTransmit>(OnTransmit); // 註冊封包攔截
         
         RegisterEventHandler<EventMapShutdown>((@event, info) => {
             _isServerShuttingDown = true;
@@ -260,8 +334,13 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         _pendingInitialReminders.Remove(steamId);
                         _hasReceivedInitialReminder.Remove(steamId);
 
+                        // 清除該玩家專屬的 3D 文字
                         _playerHudTicks.Remove(steamId);
-                        _playerHudText.Remove(steamId);
+                        if (_playerWorldText.TryGetValue(steamId, out var worldText) && worldText != null && worldText.IsValid)
+                        {
+                            worldText.Remove();
+                        }
+                        _playerWorldText.Remove(steamId);
 
                         if (_isMatchLive) 
                         {
@@ -353,8 +432,13 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             _isServerShuttingDown = false;
 
+            // 切換地圖時徹底清空所有 3D 實體
+            foreach (var kvp in _playerWorldText)
+            {
+                if (kvp.Value != null && kvp.Value.IsValid) kvp.Value.Remove();
+            }
+            _playerWorldText.Clear();
             _playerHudTicks.Clear();
-            _playerHudText.Clear();
 
             ResetMatchState();
             Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
@@ -428,7 +512,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveTimer?.Kill();
         _liveTimer = null;
 
-        // 使用 \n 來斷行純文字
         ShowHud($"{Config.HudText_MatchAbort_Line1}\n{Config.HudText_MatchAbort_Line2}", Config.HudDuration_Abort);
 
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}玩 家 離 退 對 戰 終 止，請 重 新 輸 入 {ChatColors.Lime}!R {ChatColors.Orange}對 戰");
@@ -595,7 +678,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 已 準 備！準 備 進 度：{ChatColors.Green}{_readyPlayers.Count} / {targetPlayers}");
         
         string prepString = "";
-        // 組合兩行純文字，用 \n 斷行
         if (targetPlayers <= 2)
         {
             prepString = $"{Config.HudText_Prep1v1_Line1}\n{string.Format(Config.HudText_Prep1v1_Line2, _readyPlayers.Count, missingPlayers)}";
@@ -984,6 +1066,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Unload(bool hotReload)
     {
         _isServerShuttingDown = true;
+        
+        // 卸載時清空所有實體
+        foreach (var kvp in _playerWorldText)
+        {
+            if (kvp.Value != null && kvp.Value.IsValid) kvp.Value.Remove();
+        }
+        _playerWorldText.Clear();
+
         base.Unload(hotReload);
     }
 }

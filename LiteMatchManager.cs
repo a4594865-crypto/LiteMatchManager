@@ -60,7 +60,7 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("Hud3D_Color_R")] public int Hud3D_Color_R { get; set; } = 255;
     [JsonPropertyName("Hud3D_Color_G")] public int Hud3D_Color_G { get; set; } = 215; // 預設金色
     [JsonPropertyName("Hud3D_Color_B")] public int Hud3D_Color_B { get; set; } = 0;
-    [JsonPropertyName("Hud3D_FontSize")] public int Hud3D_FontSize { get; set; } = 8; // 你指定的字體大小
+    [JsonPropertyName("Hud3D_FontSize")] public int Hud3D_FontSize { get; set; } = 8; // 字體大小
     [JsonPropertyName("Hud3D_BorderWidth")] public float Hud3D_BorderWidth { get; set; } = 0.2f; // 底板寬度
     [JsonPropertyName("Hud3D_BorderHeight")] public float Hud3D_BorderHeight { get; set; } = 0.15f; // 底板高度
 
@@ -129,7 +129,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         try
         {
             PluginCapability<IGameHUDAPI> CapabilityCP = new("gamehud:api");
-            _api = IGameHUDAPI.Capability.Get();
+            _api = CapabilityCP.Get(); // 🌟 已修正：正確使用 CapabilityCP 獲取 API 實例
             Console.WriteLine("[LiteMatch] 成功載入 CS2_GameHUD API！");
         }
         catch (Exception)

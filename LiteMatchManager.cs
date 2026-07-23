@@ -17,9 +17,6 @@ namespace LiteMatchManager;
 
 public class LiteMatchConfig : BasePluginConfig
 {
-    // ==========================================
-    // 伺服器基礎設定 (已替換為你的專屬預設值)
-    // ==========================================
     [JsonPropertyName("MinPlayersToStart")] public int MinPlayersToStart { get; set; } = 4;
     [JsonPropertyName("MaxPlayersPerTeam")] public int MaxPlayersPerTeam { get; set; } = 3; 
     [JsonPropertyName("KickUnreadyPlayerTime")] public int KickUnreadyPlayerTime { get; set; } = 420;
@@ -49,20 +46,12 @@ public class LiteMatchConfig : BasePluginConfig
         "awp_lego_fix_pro:3714256540"
     ];
 
-    // ==========================================
-    // 自訂秒數與防抖動機制 (已替換為你的專屬預設值)
-    // ==========================================
     [JsonPropertyName("HudDuration_Prep")] public float HudDuration_Prep { get; set; } = 4.0f;
     [JsonPropertyName("HudDuration_Start")] public float HudDuration_Start { get; set; } = 5.0f;
     [JsonPropertyName("HudDuration_Abort")] public float HudDuration_Abort { get; set; } = 3.0f;
     [JsonPropertyName("HudDuration_Round1")] public float HudDuration_Round1 { get; set; } = 3.5f;
     [JsonPropertyName("Live_Execute_Delay")] public float Live_Execute_Delay { get; set; } = 4.0f;
 
-    [JsonPropertyName("HudRefreshTicks")] public int HudRefreshTicks { get; set; } = 16; // 防抖動核心：預設每 16 Ticks (秒/4次) 刷新一次
-
-    // ==========================================
-    // 自訂 HTML HUD 框 (已替換為你的華麗排版)
-    // ==========================================
     [JsonPropertyName("HudHtml_Prep1v1_Line1")] 
     public string HudHtml_Prep1v1_Line1 { get; set; } = "<font class='fontSize-l' color='lime'><b>✦</font> <font class='fontSize-l' color='white'>人 數 觸 發 <font class='fontSize-l' color='gold'>1 v 1</font> 單 挑 </font><font class='fontSize-l' color='lime'>✦</font></b><br>";
     
@@ -97,9 +86,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.56_SmoothHudFix";
+    public override string ModuleVersion => "8.57_SmartSwitch_Ultimate";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純 8.56 版 + 20勝免死金牌 (完美防卡圖 + HUD降頻無抖動版)";
+    public override string ModuleDescription => "純 8.57 版 (智慧煞車機制：絕對靜止 HUD + 完美熱身保留)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -125,6 +114,18 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private Dictionary<ulong, int> _playerHudTicks = new(64);
     private Dictionary<ulong, string> _playerHudHtml = new(64);
 
+    // 【新增】：重新引入 GameRules，但這次我們用智慧控制它
+    private CCSGameRules? _gameRules;
+    private bool _gameRulesInitialized;
+
+    private void InitializeGameRules()
+    {
+        if (_gameRulesInitialized) return;
+        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
+        _gameRules = gameRulesProxy?.GameRules;
+        _gameRulesInitialized = _gameRules != null;
+    }
+
     private void ShowHud(string html, float displaySeconds = 3.0f)
     {
         int totalTicks = (int)(displaySeconds * 64);
@@ -137,6 +138,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 _playerHudHtml[steamId] = html;        
                 _playerHudTicks[steamId] = totalTicks; 
                 
+                // 觸發瞬間立刻印出
                 p.PrintToCenterHtml(html);
             }
         }
@@ -144,6 +146,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
     private void OnTick()
     {
+        bool requireHudFix = false; // 智慧開關狀態偵測
+
         foreach (var p in Utilities.GetPlayers())
         {
             if (p != null && p.IsValid && !p.IsBot)
@@ -152,12 +156,29 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 
                 if (_playerHudTicks.TryGetValue(steamId, out int ticksLeft) && ticksLeft > 0)
                 {
-                    if (ticksLeft % Config.HudRefreshTicks == 0)
+                    requireHudFix = true; // 只要場上還有任何一個人的 HUD 顯示秒數還沒結束，就打開防閃開關
+
+                    // 因為官方 HUD 已經被掐斷了，我們完全不需要狂刷。每 1 秒 (64 Ticks) 補發一次防止自然消失即可。
+                    // 這樣 100% 不會抖動，也不會閃爍。
+                    if (ticksLeft % 64 == 0)
                     {
                         p.PrintToCenterHtml(_playerHudHtml[steamId]);
                     }
                     _playerHudTicks[steamId] = ticksLeft - 1;
                 }
+            }
+        }
+
+        // ==========================================
+        // 【核心】：智慧煞車機制
+        // 只有在 requireHudFix 為 true 時，才干預熱身畫面。秒數一到立刻放開。
+        // ==========================================
+        if (requireHudFix)
+        {
+            if (!_gameRulesInitialized) InitializeGameRules();
+            if (_gameRules != null)
+            {
+                _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
             }
         }
 
@@ -219,7 +240,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.56 (降頻消抖動版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.57 (智慧煞車：絕對不動版) 啟動！");
         Console.WriteLine("=================================================");
 
         _isServerShuttingDown = false;
@@ -348,6 +369,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         RegisterListener<Listeners.OnMapStart>(mapName => 
         {
             _isServerShuttingDown = false;
+            
+            _gameRules = null;
+            _gameRulesInitialized = false;
 
             _playerHudTicks.Clear();
             _playerHudHtml.Clear();
@@ -358,6 +382,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
             });
         });
+
+        if (hotReload)
+        {
+            InitializeGameRules();
+        }
     }
 
     private int GetDynamicRequiredPlayers()

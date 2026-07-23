@@ -1,18 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework> 
-    <RootNamespace>LiteMatchManager</RootNamespace>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    
-    <GenerateDependencyFile>false</GenerateDependencyFile>
-    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
   </PropertyGroup>
 
+  <!-- CSS 官方依賴 -->
   <ItemGroup>
-    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.371" />
+    <PackageReference Include="CounterStrikeSharp.API" Version="254.0.0" />
+  </ItemGroup>
+
+  <!-- 🌟 引用原作者的 API DLL，並設定 Private為false 🌟 -->
+  <ItemGroup>
+    <Reference Include="CS2_GameHUDAPI">
+      <HintPath>lib\CS2-GameHUDAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
 </Project>

@@ -1,16 +1,17 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
+using CounterStrikeSharp.API.Core.Capabilities; // API 必須
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Timers; 
 using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Cvars;
+using CS2_GameHUDAPI; // 引用作者的 API 命名空間
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using System;
 using System.Linq;
-using System.Drawing; // 用於 3D 文字顏色設定
 
 namespace LiteMatchManager;
 
@@ -54,41 +55,37 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("Live_Execute_Delay")] public float Live_Execute_Delay { get; set; } = 4.0f;
 
     // ==========================================
-    // 3D 空間文字 (PointWorldText) 專用設定
+    // API 3D 空間文字設定 (純文字限定，不支援 HTML)
     // ==========================================
     [JsonPropertyName("Hud3D_Color_R")] public int Hud3D_Color_R { get; set; } = 255;
-    [JsonPropertyName("Hud3D_Color_G")] public int Hud3D_Color_G { get; set; } = 215; // 預設為金色
+    [JsonPropertyName("Hud3D_Color_G")] public int Hud3D_Color_G { get; set; } = 215; // 預設金色
     [JsonPropertyName("Hud3D_Color_B")] public int Hud3D_Color_B { get; set; } = 0;
-    [JsonPropertyName("Hud3D_FontSize")] public int Hud3D_FontSize { get; set; } = 32; // 自訂字體大小
-    [JsonPropertyName("Hud3D_Distance")] public float Hud3D_Distance { get; set; } = 7.0f; // 距離玩家多遠
+    [JsonPropertyName("Hud3D_FontSize")] public int Hud3D_FontSize { get; set; } = 8; // 你指定的字體大小
+    [JsonPropertyName("Hud3D_BorderWidth")] public float Hud3D_BorderWidth { get; set; } = 0.2f; // 底板寬度
+    [JsonPropertyName("Hud3D_BorderHeight")] public float Hud3D_BorderHeight { get; set; } = 0.15f; // 底板高度
 
     [JsonPropertyName("HudText_Prep1v1_Line1")] 
     public string HudText_Prep1v1_Line1 { get; set; } = "✦ 人 數 觸 發 1 v 1 單 挑 ✦";
-    
     [JsonPropertyName("HudText_Prep1v1_Line2")] 
-    public string HudText_Prep1v1_Line2 { get; set; } = "已 準 備：{0} / 2 ( 尚 缺 {1} 人 )";
+    public string HudText_Prep1v1_Line2 { get; set; } = "已 準 備：{0} / 2  ( 尚 缺 {1} 人 )";
     
     [JsonPropertyName("HudText_Prep2v2_Line1")] 
     public string HudText_Prep2v2_Line1 { get; set; } = "✦ 人 數 觸 發 2 v 2 團 戰 ✦";
-    
     [JsonPropertyName("HudText_Prep2v2_Line2")] 
-    public string HudText_Prep2v2_Line2 { get; set; } = "已 準 備：{0} / {2} ( 尚 缺 {1} 人 )";
+    public string HudText_Prep2v2_Line2 { get; set; } = "已 準 備：{0} / {2}  ( 尚 缺 {1} 人 )";
 
     [JsonPropertyName("HudText_Prep3v3_Line1")] 
     public string HudText_Prep3v3_Line1 { get; set; } = "✦ 人 數 觸 發 3 v 3 團 戰 ✦";
-    
     [JsonPropertyName("HudText_Prep3v3_Line2")] 
-    public string HudText_Prep3v3_Line2 { get; set; } = "已 準 備：{0} / {2} ( 尚 缺 {1} 人 )";
+    public string HudText_Prep3v3_Line2 { get; set; } = "已 準 備：{0} / {2}  ( 尚 缺 {1} 人 )";
     
     [JsonPropertyName("HudText_MatchAbort_Line1")] 
     public string HudText_MatchAbort_Line1 { get; set; } = "【 玩 家 逃 跑 ， 戰 鬥 已 終 止 】";
-
     [JsonPropertyName("HudText_MatchAbort_Line2")] 
     public string HudText_MatchAbort_Line2 { get; set; } = "比 賽 已 退 回 暖 身 模 式";
 
     [JsonPropertyName("HudText_Round1_Line1")] 
     public string HudText_Round1_Line1 { get; set; } = "★ 狙 擊 戰 鬥 開 始 ★";
-
     [JsonPropertyName("HudText_Round1_Line2")] 
     public string HudText_Round1_Line2 { get; set; } = "對 戰 採 ２０ 回 合 勝 利 制";
 }
@@ -96,11 +93,13 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.63_PointWorldText_3D";
+    public override string ModuleVersion => "8.70_API_GameHUD";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純 8.63 版 (吸收 CS2_GameHUD 核心，內建 3D 空間靜態文字)";
+    public override string ModuleDescription => "純 8.53 版 + 20勝免死金牌 + 呼叫 CS2_GameHUD API";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
+
+    public static IGameHUDAPI? _api; // 宣告 API 變數
 
     private string _cachedPrefix = "";
     private HashSet<ulong> _readyPlayers = new(64);
@@ -121,102 +120,71 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _liveTimer; 
 
-    // 用來儲存每個玩家專屬的 3D 文字實體與剩餘顯示時間
-    private Dictionary<ulong, CPointWorldText> _playerWorldText = new(64);
-    private Dictionary<ulong, int> _playerHudTicks = new(64);
+    private CCSGameRules? _gameRules;
+    private bool _gameRulesInitialized;
 
-    private void ShowHud(string text, float displaySeconds = 3.0f)
+    public override void OnAllPluginsLoaded(bool hotReload)
     {
-        int totalTicks = (int)(displaySeconds * 64);
+        // 載入 CS2_GameHUD API
+        try
+        {
+            PluginCapability<IGameHUDAPI> CapabilityCP = new("gamehud:api");
+            _api = IGameHUDAPI.Capability.Get();
+            Console.WriteLine("[LiteMatch] 成功載入 CS2_GameHUD API！");
+        }
+        catch (Exception)
+        {
+            _api = null;
+            Console.WriteLine("[LiteMatch] 警告：CS2_GameHUD API 載入失敗！請確認已安裝 CS2_GameHUD.dll");
+        }
+    }
+
+    private void InitializeGameRules()
+    {
+        if (_gameRulesInitialized) return;
+        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
+        _gameRules = gameRulesProxy?.GameRules;
+        _gameRulesInitialized = _gameRules != null;
+    }
+
+    // 將所有 HUD 顯示改為呼叫 API
+    private void ShowHud(string text, float duration = 5.0f)
+    {
+        if (_api == null) return; // 如果沒裝 GameHUD 插件就直接返回
 
         foreach (var p in Utilities.GetPlayers())
         {
-            if (p != null && p.IsValid && !p.IsBot && p.PlayerPawn != null && p.PlayerPawn.Value != null)
+            if (p != null && p.IsValid && !p.IsBot)
             {
-                ulong steamId = p.SteamID;
-                _playerHudTicks[steamId] = totalTicks;
+                // 設定 3D 文字參數 (字體大小、顏色、底框)
+                _api.Native_GameHUD_SetParams(
+                    p, 
+                    0, // Channel 0
+                    0.0f, 0.0f, 7.0f, // X, Y, Z (距離玩家 7 單位)
+                    System.Drawing.Color.FromArgb(255, Config.Hud3D_Color_R, Config.Hud3D_Color_G, Config.Hud3D_Color_B), 
+                    Config.Hud3D_FontSize, 
+                    "Verdana", 
+                    0.05f, 
+                    PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER, 
+                    PointWorldTextJustifyVertical_t.POINT_WORLD_TEXT_JUSTIFY_VERTICAL_CENTER, 
+                    PointWorldTextReorientMode_t.POINT_WORLD_TEXT_REORIENT_NONE, 
+                    Config.Hud3D_BorderHeight, 
+                    Config.Hud3D_BorderWidth
+                );
 
-                // 如果該玩家還沒有專屬的 3D 文字實體，就創建一個
-                if (!_playerWorldText.TryGetValue(steamId, out var worldText) || worldText == null || !worldText.IsValid)
-                {
-                    worldText = Utilities.CreateEntityByName<CPointWorldText>("point_worldtext");
-                    if (worldText != null)
-                    {
-                        worldText.FontSize = Config.Hud3D_FontSize;
-                        worldText.FontName = "Verdana";
-                        worldText.Enabled = true;
-                        worldText.Fullbright = true;
-                        worldText.WorldUnitsPerPx = 0.05f; 
-                        worldText.Color = Color.FromArgb(255, Config.Hud3D_Color_R, Config.Hud3D_Color_G, Config.Hud3D_Color_B);
-                        worldText.JustifyHorizontal = PointWorldTextJustifyHorizontal_t.POINT_WORLD_TEXT_JUSTIFY_HORIZONTAL_CENTER;
-                        worldText.JustifyVertical = PointWorldTextJustifyVertical_t.POINT_WORLD_TEXT_JUSTIFY_VERTICAL_CENTER;
-                        worldText.ReorientMode = PointWorldTextReorientMode_t.POINT_WORLD_TEXT_REORIENT_NONE;
-                        
-                        worldText.DispatchSpawn();
-                        _playerWorldText[steamId] = worldText;
-                    }
-                }
-
-                if (worldText != null && worldText.IsValid)
-                {
-                    worldText.MessageText = text;
-                    worldText.AcceptInput("SetMessage", null, null, text);
-                }
+                // 顯示文字，時間到後自動消失
+                _api.Native_GameHUD_Show(p, 0, text, duration);
             }
         }
     }
 
-    // 將玩家視角轉換為 3D 空間向量 (借鏡 API 寫法)
-    private static void AngleVectors(QAngle angles, out Vector forward, out Vector right, out Vector up)
-    {
-        (float sy, float cy) = MathF.SinCos(angles.Y * MathF.PI / 180.0f);
-        (float sp, float cp) = MathF.SinCos(angles.X * MathF.PI / 180.0f);
-
-        forward = new Vector(cp * cy, cp * sy, -sp);
-        right = new Vector(sy, -cy, 0);
-        up = new Vector(sp * cy, sp * sy, cp);
-    }
-
     private void OnTick()
     {
-        // 核心機制：每 Tick 把專屬的 3D 文字「傳送」到玩家眼前
-        foreach (var p in Utilities.GetPlayers())
+        if (!_gameRulesInitialized) InitializeGameRules();
+
+        if (_gameRules != null)
         {
-            if (p == null || !p.IsValid || p.IsBot) continue;
-            ulong steamId = p.SteamID;
-
-            if (_playerHudTicks.TryGetValue(steamId, out int ticksLeft) && ticksLeft > 0)
-            {
-                if (_playerWorldText.TryGetValue(steamId, out var worldText) && worldText != null && worldText.IsValid)
-                {
-                    var pawn = p.PlayerPawn.Value;
-                    if (pawn != null && pawn.IsValid && pawn.AbsOrigin != null && pawn.V_angle != null)
-                    {
-                        QAngle angles = pawn.V_angle;
-                        AngleVectors(angles, out Vector forward, out Vector right, out Vector up);
-
-                        Vector currentPos = new Vector(pawn.AbsOrigin.X, pawn.AbsOrigin.Y, pawn.AbsOrigin.Z);
-                        currentPos += forward * Config.Hud3D_Distance; // 往前推
-                        currentPos += new Vector(0, 0, pawn.ViewOffset.Z); // 加上眼睛高度
-
-                        QAngle currentAngle = new QAngle(0, angles.Y + 270, 90 - angles.X); // 面向玩家
-
-                        worldText.Teleport(currentPos, currentAngle, null);
-                    }
-                }
-
-                _playerHudTicks[steamId] = ticksLeft - 1;
-
-                // 時間到，刪除 3D 實體，避免殘留
-                if (ticksLeft - 1 == 0)
-                {
-                    if (worldText != null && worldText.IsValid)
-                    {
-                        worldText.Remove();
-                    }
-                    _playerWorldText.Remove(steamId);
-                }
-            }
+            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
         }
 
         if (_pendingInitialReminders.Count > 0)
@@ -260,25 +228,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         }
     }
 
-    // 【最高機密】：攔截封包，確保每個玩家只會看到自己的 3D 文字，不會看到別人的！
-    private void OnTransmit(CCheckTransmitInfoList infoList)
-    {
-        foreach ((CCheckTransmitInfo info, CCSPlayerController? player) in infoList)
-        {
-            if (player == null || !player.IsValid) continue;
-            ulong mySteamId = player.SteamID;
-
-            foreach (var kvp in _playerWorldText)
-            {
-                // 如果這個 3D 文字不是屬於我的，就從我的顯示封包裡刪除它
-                if (kvp.Key != mySteamId && kvp.Value != null && kvp.Value.IsValid)
-                {
-                    info.TransmitEntities.Remove(kvp.Value.Index);
-                }
-            }
-        }
-    }
-
     public void OnConfigParsed(LiteMatchConfig config)
     {
         Config = config;
@@ -296,7 +245,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.63 (終極 3D 空間字體版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.70 (API 依賴版 + 20勝完美防卡) 啟動！");
         Console.WriteLine("=================================================");
 
         _isServerShuttingDown = false;
@@ -310,7 +259,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         });
         
         RegisterListener<Listeners.OnTick>(OnTick);
-        RegisterListener<Listeners.CheckTransmit>(OnTransmit); // 註冊封包攔截
         
         RegisterEventHandler<EventMapShutdown>((@event, info) => {
             _isServerShuttingDown = true;
@@ -334,13 +282,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                         _pendingInitialReminders.Remove(steamId);
                         _hasReceivedInitialReminder.Remove(steamId);
 
-                        // 清除該玩家專屬的 3D 文字
-                        _playerHudTicks.Remove(steamId);
-                        if (_playerWorldText.TryGetValue(steamId, out var worldText) && worldText != null && worldText.IsValid)
+                        // 玩家斷線時，通知 API 清除 HUD 頻道
+                        if (_api != null && player.IsValid)
                         {
-                            worldText.Remove();
+                            _api.Native_GameHUD_Remove(player, 0);
                         }
-                        _playerWorldText.Remove(steamId);
 
                         if (_isMatchLive) 
                         {
@@ -431,14 +377,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         RegisterListener<Listeners.OnMapStart>(mapName => 
         {
             _isServerShuttingDown = false;
-
-            // 切換地圖時徹底清空所有 3D 實體
-            foreach (var kvp in _playerWorldText)
-            {
-                if (kvp.Value != null && kvp.Value.IsValid) kvp.Value.Remove();
-            }
-            _playerWorldText.Clear();
-            _playerHudTicks.Clear();
+            _gameRules = null;
+            _gameRulesInitialized = false;
 
             ResetMatchState();
             Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
@@ -446,6 +386,11 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
             });
         });
+
+        if (hotReload)
+        {
+            InitializeGameRules();
+        }
     }
 
     private int GetDynamicRequiredPlayers()
@@ -512,7 +457,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveTimer?.Kill();
         _liveTimer = null;
 
-        ShowHud($"{Config.HudText_MatchAbort_Line1}\n{Config.HudText_MatchAbort_Line2}", Config.HudDuration_Abort);
+        string abortText = $"{Config.HudText_MatchAbort_Line1}\n{Config.HudText_MatchAbort_Line2}";
+        ShowHud(abortText, Config.HudDuration_Abort);
 
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}玩 家 離 退 對 戰 終 止，請 重 新 輸 入 {ChatColors.Lime}!R {ChatColors.Orange}對 戰");
         Server.ExecuteCommand("mp_warmup_start");
@@ -773,7 +719,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
             string hudStartText = $"{Config.HudText_Round1_Line1}\n{Config.HudText_Round1_Line2}";
-            
             ShowHud(hudStartText, Config.HudDuration_Round1);
 
             Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 家 已 準 備，{modeText} 比 賽 開 始");
@@ -1066,14 +1011,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Unload(bool hotReload)
     {
         _isServerShuttingDown = true;
-        
-        // 卸載時清空所有實體
-        foreach (var kvp in _playerWorldText)
-        {
-            if (kvp.Value != null && kvp.Value.IsValid) kvp.Value.Remove();
-        }
-        _playerWorldText.Clear();
-
         base.Unload(hotReload);
     }
 }

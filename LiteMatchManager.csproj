@@ -8,7 +8,7 @@
 
   <!-- CSS 官方依賴 -->
   <ItemGroup>
-    <PackageReference Include="CounterStrikeSharp.API" Version="254.0.0" />
+     <PackageReference Include="CounterStrikeSharp.API" Version="1.0.371" />
   </ItemGroup>
 
   <!-- 🌟 引用原作者的 API DLL，並設定 Private為false 🌟 -->

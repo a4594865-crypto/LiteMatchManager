@@ -52,6 +52,9 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("HudDuration_Round1")] public float HudDuration_Round1 { get; set; } = 3.5f;
     [JsonPropertyName("Live_Execute_Delay")] public float Live_Execute_Delay { get; set; } = 4.0f;
 
+    // 建議將此數值在 JSON 中改為 1 或 2，以達到最完美的畫面更新率
+    [JsonPropertyName("HudRefreshTicks")] public int HudRefreshTicks { get; set; } = 1;
+
     [JsonPropertyName("HudHtml_Prep1v1_Line1")] 
     public string HudHtml_Prep1v1_Line1 { get; set; } = "<font class='fontSize-l' color='lime'><b>✦</font> <font class='fontSize-l' color='white'>人 數 觸 發 <font class='fontSize-l' color='gold'>1 v 1</font> 單 挑 </font><font class='fontSize-l' color='lime'>✦</font></b><br>";
     
@@ -86,9 +89,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.58_Absolute_Static_HUD";
+    public override string ModuleVersion => "8.59_Perfect_Sync";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純 8.58 版 (單次發送 + Poggu 智慧煞車機制 = 畫面絕對靜止不閃爍)";
+    public override string ModuleDescription => "純 8.59 版 (智慧煞車 + 完美刷新，消除 1.5 秒自動消失問題)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -137,7 +140,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 _playerHudHtml[steamId] = html;        
                 _playerHudTicks[steamId] = totalTicks; 
                 
-                // 【核心改動 1】：觸發時只印「唯一一次」，不再重複發送！
                 p.PrintToCenterHtml(html);
             }
         }
@@ -157,10 +159,16 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 {
                     requireHudFix = true; 
                     
-                    // 【核心改動 2】：只扣時間，不重新發送畫面！解決閃爍元兇。
+                    // 【核心回調】：把刷新加回來，對抗 CS2 預設的「1.5秒自動消失」。
+                    // 因為現在已經擋下了官方熱身，所以設定 1 (每滴答刷新) 也絕對不會跳動了！
+                    if (ticksLeft % Config.HudRefreshTicks == 0)
+                    {
+                        p.PrintToCenterHtml(_playerHudHtml[steamId]);
+                    }
+
                     _playerHudTicks[steamId] = ticksLeft - 1;
 
-                    // 當秒數歸零時，發送一次空字串強制清空 HUD，完美收尾。
+                    // 秒數跑完時，發送一次空字串強制清空
                     if (ticksLeft - 1 == 0)
                     {
                         p.PrintToCenterHtml("");
@@ -169,7 +177,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             }
         }
 
-        // 【核心改動 3】：Poggu 智慧煞車機制。只要有人還在看 HUD，就攔截官方 1 秒更新，保持畫面靜止。
+        // 【保留 Poggu 智慧煞車機制】：只要我們的 HUD 還在，就強制隱藏官方熱身。
         if (requireHudFix)
         {
             if (!_gameRulesInitialized) InitializeGameRules();
@@ -237,7 +245,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.58 (絕對靜止 HUD 版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.59 (終極同步版) 啟動！");
         Console.WriteLine("=================================================");
 
         _isServerShuttingDown = false;

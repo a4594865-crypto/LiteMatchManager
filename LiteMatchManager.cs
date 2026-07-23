@@ -86,9 +86,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.57_SmartSwitch_Ultimate";
+    public override string ModuleVersion => "8.58_Absolute_Static_HUD";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純 8.57 版 (智慧煞車機制：絕對靜止 HUD + 完美熱身保留)";
+    public override string ModuleDescription => "純 8.58 版 (單次發送 + Poggu 智慧煞車機制 = 畫面絕對靜止不閃爍)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -114,7 +114,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private Dictionary<ulong, int> _playerHudTicks = new(64);
     private Dictionary<ulong, string> _playerHudHtml = new(64);
 
-    // 【新增】：重新引入 GameRules，但這次我們用智慧控制它
     private CCSGameRules? _gameRules;
     private bool _gameRulesInitialized;
 
@@ -138,7 +137,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 _playerHudHtml[steamId] = html;        
                 _playerHudTicks[steamId] = totalTicks; 
                 
-                // 觸發瞬間立刻印出
+                // 【核心改動 1】：觸發時只印「唯一一次」，不再重複發送！
                 p.PrintToCenterHtml(html);
             }
         }
@@ -146,7 +145,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
     private void OnTick()
     {
-        bool requireHudFix = false; // 智慧開關狀態偵測
+        bool requireHudFix = false; 
 
         foreach (var p in Utilities.GetPlayers())
         {
@@ -156,23 +155,21 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 
                 if (_playerHudTicks.TryGetValue(steamId, out int ticksLeft) && ticksLeft > 0)
                 {
-                    requireHudFix = true; // 只要場上還有任何一個人的 HUD 顯示秒數還沒結束，就打開防閃開關
-
-                    // 因為官方 HUD 已經被掐斷了，我們完全不需要狂刷。每 1 秒 (64 Ticks) 補發一次防止自然消失即可。
-                    // 這樣 100% 不會抖動，也不會閃爍。
-                    if (ticksLeft % 64 == 0)
-                    {
-                        p.PrintToCenterHtml(_playerHudHtml[steamId]);
-                    }
+                    requireHudFix = true; 
+                    
+                    // 【核心改動 2】：只扣時間，不重新發送畫面！解決閃爍元兇。
                     _playerHudTicks[steamId] = ticksLeft - 1;
+
+                    // 當秒數歸零時，發送一次空字串強制清空 HUD，完美收尾。
+                    if (ticksLeft - 1 == 0)
+                    {
+                        p.PrintToCenterHtml("");
+                    }
                 }
             }
         }
 
-        // ==========================================
-        // 【核心】：智慧煞車機制
-        // 只有在 requireHudFix 為 true 時，才干預熱身畫面。秒數一到立刻放開。
-        // ==========================================
+        // 【核心改動 3】：Poggu 智慧煞車機制。只要有人還在看 HUD，就攔截官方 1 秒更新，保持畫面靜止。
         if (requireHudFix)
         {
             if (!_gameRulesInitialized) InitializeGameRules();
@@ -240,7 +237,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.57 (智慧煞車：絕對不動版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.58 (絕對靜止 HUD 版) 啟動！");
         Console.WriteLine("=================================================");
 
         _isServerShuttingDown = false;

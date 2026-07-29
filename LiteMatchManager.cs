@@ -868,7 +868,6 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteConfig>
         
         // 清除 HUD 狀態
         _isShowingHud = false;
-        _currentRenderedHud = "";
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

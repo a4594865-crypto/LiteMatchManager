@@ -4,7 +4,6 @@ using System;
 
 namespace LiteMatchManager;
 
-// 注意這裡加了 partial，代表它是 LiteMatchManager 的一部分
 public partial class LiteMatchManager
 {
     // === 動態 HUD 秒數的控制變數 ===

@@ -7,7 +7,6 @@ using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Cvars;
 using System.Collections.Generic;
-using System.Text.Json.Serialization;
 using System;
 using System.Linq;
 
@@ -15,76 +14,12 @@ namespace LiteMatchManager;
 
 #pragma warning disable CS8618
 
-public class LiteMatchConfig : BasePluginConfig
-{
-    [JsonPropertyName("MinPlayersToStart")] public int MinPlayersToStart { get; set; } = 4;
-    [JsonPropertyName("MaxPlayersPerTeam")] public int MaxPlayersPerTeam { get; set; } = 3; 
-    [JsonPropertyName("KickUnreadyPlayerTime")] public int KickUnreadyPlayerTime { get; set; } = 360;
-    
-    [JsonPropertyName("UnreadyReminderInterval")] public int UnreadyReminderInterval { get; set; } = 60;
-    [JsonPropertyName("PublicUnreadyReminderInterval")] public int PublicUnreadyReminderInterval { get; set; } = 15;
-    
-    [JsonPropertyName("WaitingForOpponentInterval")] public int WaitingForOpponentInterval { get; set; } = 30;
-
-    [JsonPropertyName("ChatPrefix")] public string ChatPrefix { get; set; } = "[ {Green}狙 擊 模 式{White} ]";
-    [JsonPropertyName("EnableChatWeaponCommands")] public bool EnableChatWeaponCommands { get; set; } = true;
-    
-    [JsonPropertyName("SpawnWeapons")] 
-    public List<string> SpawnWeapons { get; set; } = ["weapon_knife", "item_assaultsuit", "weapon_awp"];
-    
-    [JsonPropertyName("WarmupConfigName")] public string WarmupConfigName { get; set; } = "warmup.cfg";
-    [JsonPropertyName("LiveConfigName")] public string LiveConfigName { get; set; } = "live.cfg";
-    [JsonPropertyName("Duel_MapChangeDelay")] public int MapChangeDelay { get; set; } = 5;
-    
-    [JsonPropertyName("MapList")] 
-    public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
-
-    // === 新增：各個 HUD 的專屬顯示秒數設定 ===
-    [JsonPropertyName("HudDuration_Prep")] public int HudDuration_Prep { get; set; } = 15;
-    [JsonPropertyName("HudDuration_MatchAbort")] public int HudDuration_MatchAbort { get; set; } = 5;
-    [JsonPropertyName("HudDuration_Round1")] public int HudDuration_Round1 { get; set; } = 8;
-    
-    // === 新增：共用的秒數倒數排版 (將自動接在原 HUD 的最下方) ===
-    [JsonPropertyName("HudHtml_Countdown")] 
-    public string HudHtml_Countdown { get; set; } = "<font class='fontSize-m' color='gray'>視窗關閉倒數：{0} 秒</font>";
-
-    [JsonPropertyName("HudHtml_Prep1v1_Line1")] 
-    public string HudHtml_Prep1v1_Line1 { get; set; } = "<font class='fontSize-l' color='white'>✦ 觸 發 1 v 1 單 挑 ✦</font>";
-    
-    [JsonPropertyName("HudHtml_Prep1v1_Line2")] 
-    public string HudHtml_Prep1v1_Line2 { get; set; } = "<font class='fontSize-l' color='gray'>進度： </font><font class='fontSize-l' color='lime'>{0} / 2</font><font class='fontSize-l' color='gray'> ( 尚缺 {1} 人 )</font>";
-    
-    [JsonPropertyName("HudHtml_Prep2v2_Line1")] 
-    public string HudHtml_Prep2v2_Line1 { get; set; } = "<font class='fontSize-l' color='white'>✦ 觸 發 2 v 2 團 戰 ✦</font>";
-    
-    [JsonPropertyName("HudHtml_Prep2v2_Line2")] 
-    public string HudHtml_Prep2v2_Line2 { get; set; } = "<font class='fontSize-l' color='gray'>進度： </font><font class='fontSize-l' color='lime'>{0} / {2}</font><font class='fontSize-l' color='gray'> ( 尚缺 {1} 人 )</font>";
-
-    [JsonPropertyName("HudHtml_Prep3v3_Line1")] 
-    public string HudHtml_Prep3v3_Line1 { get; set; } = "<font class='fontSize-l' color='white'>✦ 觸 發 3 v 3 大 亂 鬥 ✦</font>";
-    
-    [JsonPropertyName("HudHtml_Prep3v3_Line2")] 
-    public string HudHtml_Prep3v3_Line2 { get; set; } = "<font class='fontSize-l' color='gray'>進度： </font><font class='fontSize-l' color='lime'>{0} / {2}</font><font class='fontSize-l' color='gray'> ( 尚缺 {1} 人 )</font>";
-    
-    [JsonPropertyName("HudHtml_MatchAbort_Line1")] 
-    public string HudHtml_MatchAbort_Line1 { get; set; } = "<font class='fontSize-l' color='red'>[ 警 告 ] 玩 家 逃 跑 ， 戰 鬥 終 止</font>";
-
-    [JsonPropertyName("HudHtml_MatchAbort_Line2")] 
-    public string HudHtml_MatchAbort_Line2 { get; set; } = "<font class='fontSize-l' color='white'>已 退 回 暖 身 模 式</font>";
-
-    [JsonPropertyName("HudHtml_Round1_Line1")] 
-    public string HudHtml_Round1_Line1 { get; set; } = "<font class='fontSize-l' color='gold'>✦ 戰 鬥 開 始 ✦</font>";
-
-    [JsonPropertyName("HudHtml_Round1_Line2")] 
-    public string HudHtml_Round1_Line2 { get; set; } = "<font class='fontSize-l' color='white'>率 先 取 得 </font><font class='fontSize-xxl' color='lime'><b>２０</b></font><font class='fontSize-xxl' color='white'> 勝 者 為 贏 家</font>";
-}
-
-public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
+public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.54_HUD_Countdown";
+    public override string ModuleVersion => "8.54_HUD_ConfigSplit";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純 8.53 版 + 20勝免死金牌 + 轉發聊天 + 動態HUD秒數";
+    public override string ModuleDescription => "主程式與 HUD、Config 拆分版";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -110,14 +45,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CCSGameRules? _gameRules;
     private bool _gameRulesInitialized;
 
-    // === 新增：動態 HUD 秒數的控制變數 ===
-    private bool _isShowingHud = false;
-    private float _hudEndTime = 0f;
-    private string _cachedHudBaseHtml = ""; 
-    private string _currentRenderedHud = ""; 
-    private int _lastRemainingSeconds = -1;
-    private bool _runThisTickHud = false; 
-
     private void InitializeGameRules()
     {
         if (_gameRulesInitialized) return;
@@ -126,48 +53,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _gameRulesInitialized = _gameRules != null;
     }
 
-    // === 修改：取代原本靜態的 ShowHud，改為帶有秒數與持續時間的推播方法 ===
-    private void ShowHudWithCountdown(string baseHtml, int durationSeconds)
-    {
-        _cachedHudBaseHtml = baseHtml;
-        _hudEndTime = Server.CurrentTime + durationSeconds;
-        _isShowingHud = true;
-        _lastRemainingSeconds = -1; // 強制重置，讓 OnTick 立即更新字串
-    }
-
     private void OnTick()
     {
-        // === 新增：動態 HUD 更新邏輯 (借鑑 ServerGraphic 並進行效能優化) ===
-        _runThisTickHud = !_runThisTickHud; // 降低一半的 Tick 處理頻率
-        if (_runThisTickHud && _isShowingHud)
-        {
-            float currentTime = Server.CurrentTime;
-            if (currentTime >= _hudEndTime)
-            {
-                _isShowingHud = false; // 時間到，停止推播 HUD
-            }
-            else
-            {
-                // 計算剩餘的整數秒數
-                int remaining = (int)Math.Ceiling(_hudEndTime - currentTime);
-                
-                // 只有當秒數「改變」時，才重新組裝字串 (完美解決效能浪費與閃爍問題)
-                if (remaining != _lastRemainingSeconds)
-                {
-                    _lastRemainingSeconds = remaining;
-                    string countdownLine = string.Format(Config.HudHtml_Countdown, remaining);
-                    _currentRenderedHud = _cachedHudBaseHtml + countdownLine;
-                }
-                
-                // 將最新的 HTML 畫面推給所有有效玩家
-                foreach (var p in Utilities.GetPlayers())
-                {
-                    if (p != null && p.IsValid && !p.IsBot) 
-                        p.PrintToCenterHtml(_currentRenderedHud);
-                }
-            }
-        }
-        // ==============================================================
+        // 呼叫 LiteHud.cs 裡的 HUD 渲染與倒數邏輯
+        HandleHudTick();
 
         if (!_gameRulesInitialized) InitializeGameRules();
 
@@ -234,7 +123,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.54 (動態HUD秒數版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.54 (檔案拆分版) 啟動！");
         Console.WriteLine("=================================================");
 
         _isServerShuttingDown = false;
@@ -441,7 +330,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveTimer = null;
 
         string abortString = $"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}<br>";
-        // 改用帶秒數與持續時間的新版 ShowHud
         ShowHudWithCountdown(abortString, Config.HudDuration_MatchAbort);
 
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}玩 家 離 退 對 戰 終 止，請 重 新 輸 入 {ChatColors.Lime}!R {ChatColors.Orange}對 戰");
@@ -623,7 +511,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         _readyPlayers.Add(steamId);
         _playerUnreadyTime.Remove(steamId); 
-        
         _pendingInitialReminders.Remove(steamId); 
 
         int targetPlayers = GetDynamicRequiredPlayers();
@@ -644,7 +531,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
         }
 
-        // 改用帶秒數與持續時間的新版 ShowHud
         ShowHudWithCountdown(prepString, Config.HudDuration_Prep);
 
         CheckMatchStart();
@@ -696,7 +582,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
             }
 
-            // 改用帶秒數與持續時間的新版 ShowHud
             ShowHudWithCountdown(prepString, Config.HudDuration_Prep);
         }
     }
@@ -728,7 +613,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
             string hudStartText = $"{Config.HudHtml_Round1_Line1}<br>{Config.HudHtml_Round1_Line2}<br>";
-            // 改用帶秒數與持續時間的新版 ShowHud
             ShowHudWithCountdown(hudStartText, Config.HudDuration_Round1);
 
             Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 家 已 準 備，{modeText} 比 賽 開 始");
@@ -813,7 +697,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             case "!ssg": _playerPrimary[steamId] = "weapon_ssg08"; ReplaceWeapon(player, "weapon_ssg08"); return true;
             case "!awp": _playerPrimary[steamId] = "weapon_awp"; ReplaceWeapon(player, "weapon_awp"); return true;
-            
             case "!gs": OnGsCommand(player, null!); return true;
         }
         return false;
@@ -977,14 +860,13 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveMatchTargetPlayers = 0; 
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
-
         _pendingInitialReminders.Clear();
         _hasReceivedInitialReminder.Clear();
 
         _liveTimer?.Kill();
         _liveTimer = null;
         
-        // 清除 HUD
+        // 清除 HUD 狀態
         _isShowingHud = false;
         _currentRenderedHud = "";
         

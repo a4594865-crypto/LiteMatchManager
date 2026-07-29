@@ -39,6 +39,15 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("MapList")] 
     public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
 
+    // === 新增：各個 HUD 的專屬顯示秒數設定 ===
+    [JsonPropertyName("HudDuration_Prep")] public int HudDuration_Prep { get; set; } = 15;
+    [JsonPropertyName("HudDuration_MatchAbort")] public int HudDuration_MatchAbort { get; set; } = 5;
+    [JsonPropertyName("HudDuration_Round1")] public int HudDuration_Round1 { get; set; } = 8;
+    
+    // === 新增：共用的秒數倒數排版 (將自動接在原 HUD 的最下方) ===
+    [JsonPropertyName("HudHtml_Countdown")] 
+    public string HudHtml_Countdown { get; set; } = "<font class='fontSize-m' color='gray'>視窗關閉倒數：{0} 秒</font>";
+
     [JsonPropertyName("HudHtml_Prep1v1_Line1")] 
     public string HudHtml_Prep1v1_Line1 { get; set; } = "<font class='fontSize-l' color='white'>✦ 觸 發 1 v 1 單 挑 ✦</font>";
     
@@ -73,9 +82,9 @@ public class LiteMatchConfig : BasePluginConfig
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.53_UltimateFix";
+    public override string ModuleVersion => "8.54_HUD_Countdown";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純 8.53 版 + 20勝免死金牌 (完美防卡圖) + 轉發聊天";
+    public override string ModuleDescription => "純 8.53 版 + 20勝免死金牌 + 轉發聊天 + 動態HUD秒數";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -101,6 +110,14 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CCSGameRules? _gameRules;
     private bool _gameRulesInitialized;
 
+    // === 新增：動態 HUD 秒數的控制變數 ===
+    private bool _isShowingHud = false;
+    private float _hudEndTime = 0f;
+    private string _cachedHudBaseHtml = ""; 
+    private string _currentRenderedHud = ""; 
+    private int _lastRemainingSeconds = -1;
+    private bool _runThisTickHud = false; 
+
     private void InitializeGameRules()
     {
         if (_gameRulesInitialized) return;
@@ -109,16 +126,49 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _gameRulesInitialized = _gameRules != null;
     }
 
-    private void ShowHud(string html)
+    // === 修改：取代原本靜態的 ShowHud，改為帶有秒數與持續時間的推播方法 ===
+    private void ShowHudWithCountdown(string baseHtml, int durationSeconds)
     {
-        foreach (var p in Utilities.GetPlayers())
-        {
-            if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
-        }
+        _cachedHudBaseHtml = baseHtml;
+        _hudEndTime = Server.CurrentTime + durationSeconds;
+        _isShowingHud = true;
+        _lastRemainingSeconds = -1; // 強制重置，讓 OnTick 立即更新字串
     }
 
     private void OnTick()
     {
+        // === 新增：動態 HUD 更新邏輯 (借鑑 ServerGraphic 並進行效能優化) ===
+        _runThisTickHud = !_runThisTickHud; // 降低一半的 Tick 處理頻率
+        if (_runThisTickHud && _isShowingHud)
+        {
+            float currentTime = Server.CurrentTime;
+            if (currentTime >= _hudEndTime)
+            {
+                _isShowingHud = false; // 時間到，停止推播 HUD
+            }
+            else
+            {
+                // 計算剩餘的整數秒數
+                int remaining = (int)Math.Ceiling(_hudEndTime - currentTime);
+                
+                // 只有當秒數「改變」時，才重新組裝字串 (完美解決效能浪費與閃爍問題)
+                if (remaining != _lastRemainingSeconds)
+                {
+                    _lastRemainingSeconds = remaining;
+                    string countdownLine = string.Format(Config.HudHtml_Countdown, remaining);
+                    _currentRenderedHud = _cachedHudBaseHtml + countdownLine;
+                }
+                
+                // 將最新的 HTML 畫面推給所有有效玩家
+                foreach (var p in Utilities.GetPlayers())
+                {
+                    if (p != null && p.IsValid && !p.IsBot) 
+                        p.PrintToCenterHtml(_currentRenderedHud);
+                }
+            }
+        }
+        // ==============================================================
+
         if (!_gameRulesInitialized) InitializeGameRules();
 
         if (_gameRules != null)
@@ -184,7 +234,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.53 (究極防卡圖 20勝版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.54 (動態HUD秒數版) 啟動！");
         Console.WriteLine("=================================================");
 
         _isServerShuttingDown = false;
@@ -390,7 +440,9 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveTimer?.Kill();
         _liveTimer = null;
 
-        ShowHud($"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}<br>");
+        string abortString = $"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}<br>";
+        // 改用帶秒數與持續時間的新版 ShowHud
+        ShowHudWithCountdown(abortString, Config.HudDuration_MatchAbort);
 
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}玩 家 離 退 對 戰 終 止，請 重 新 輸 入 {ChatColors.Lime}!R {ChatColors.Orange}對 戰");
         Server.ExecuteCommand("mp_warmup_start");
@@ -471,13 +523,12 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             char c = rawArg[i];
             if (c == '"' || c == ' ') continue; 
-            if (c == '!' || c == '/') { isCommand = true; break; } // 加入了 '/' 以相容指令判斷
+            if (c == '!' || c == '/') { isCommand = true; break; } 
             break; 
         }
 
         if (!isCommand) 
         {
-            // === 完美移植：轉發聊天邏輯 ===
             string message = rawArg.Trim('"', ' '); 
             if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
 
@@ -498,7 +549,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             }
 
             return HookResult.Handled; 
-            // === 轉發聊天邏輯結束 ===
         }
 
         string command = rawArg.Trim('"', ' ').ToLower();
@@ -594,7 +644,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
         }
 
-        ShowHud(prepString);
+        // 改用帶秒數與持續時間的新版 ShowHud
+        ShowHudWithCountdown(prepString, Config.HudDuration_Prep);
 
         CheckMatchStart();
 
@@ -645,7 +696,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
             }
 
-            ShowHud(prepString);
+            // 改用帶秒數與持續時間的新版 ShowHud
+            ShowHudWithCountdown(prepString, Config.HudDuration_Prep);
         }
     }
 
@@ -676,7 +728,8 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
             string hudStartText = $"{Config.HudHtml_Round1_Line1}<br>{Config.HudHtml_Round1_Line2}<br>";
-            ShowHud(hudStartText);
+            // 改用帶秒數與持續時間的新版 ShowHud
+            ShowHudWithCountdown(hudStartText, Config.HudDuration_Round1);
 
             Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 家 已 準 備，{modeText} 比 賽 開 始");
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}２０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
@@ -930,6 +983,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
         _liveTimer?.Kill();
         _liveTimer = null;
+        
+        // 清除 HUD
+        _isShowingHud = false;
+        _currentRenderedHud = "";
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace LiteMatchManager;
 
-public class LiteMatchConfig : BasePluginConfig
+public class LiteConfig : BasePluginConfig
 {
     [JsonPropertyName("MinPlayersToStart")] public int MinPlayersToStart { get; set; } = 4;
     [JsonPropertyName("MaxPlayersPerTeam")] public int MaxPlayersPerTeam { get; set; } = 3; 

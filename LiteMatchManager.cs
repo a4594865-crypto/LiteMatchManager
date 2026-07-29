@@ -183,17 +183,14 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteConfig>
         return null;
     }
 
-    public static bool IsPlayerValid(CCSPlayerController? player)
-    {
-        return player != null
-            && player.IsValid
-            && !player.IsBot
-            && player.Pawn != null
-            && player.Pawn.IsValid
-            && player.Connected == PlayerConnectedState.Connected
-            && !player.IsHLTV;
-    }
-
+public static bool IsPlayerValid(CCSPlayerController? player)
+{
+    return player != null
+        && player.IsValid
+        && player.Handle != IntPtr.Zero
+        && !player.IsBot
+        && !player.IsHLTV;
+}
     public void OnConfigParsed(LiteConfig config)
     {
         Config = config;

@@ -1,82 +1,144 @@
+using System;
+using System.Linq;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
-using System;
-using System.Collections.Generic;
+using CounterStrikeSharp.API.Core.Attributes.Registration;
+using CounterStrikeSharp.API.Modules.Commands;
 
-namespace LiteMatchManager;
+namespace LiteHud;
 
-// 💡 注意這裡：必須是 public partial class，絕對不能是 private
-public partial class LiteMatchManager
+public class LiteHud : BasePlugin
 {
-    private bool _isShowingHud = false;
-    private float _hudEndTime = 0f;
-    private string _cachedHudBaseHtml = ""; 
-    private int _lastRemainingSeconds = -1;
-    
-    // 【極限優化核心】：宣告一個專屬發送名單
-    private List<CCSPlayerController> _hudTargetPlayers = new List<CCSPlayerController>();
+    public override string ModuleName => "LiteHud";
+    public override string ModuleVersion => "1.0.0";
+    public override string ModuleAuthor => "Custom";
 
-    private void ShowHudWithCountdown(string baseHtml, int durationSeconds)
+    // 照抄 ServerGraphic 的全域變數架構
+    public bool _isShowingHud = false;
+    private bool _runThisTick = false;
+    private float _hudEndTime = 0f;
+    private CCSGameRulesProxy? _gameRulesProxy;
+
+    public override void Load(bool hotReload)
     {
-        _cachedHudBaseHtml = baseHtml;
-        _hudEndTime = Server.CurrentTime + durationSeconds;
-        _isShowingHud = true;
-        _lastRemainingSeconds = -1; 
-        
-        // 【建立名單】：一開始就點名，不用每次 Tick 都重新尋找玩家
-        _hudTargetPlayers.Clear(); 
-        foreach (var p in Utilities.GetPlayers())
+        Console.WriteLine("[LiteHud] 插件已載入 - 採用 ServerGraphic 核心邏輯");
+        RegisterListener<Listeners.OnTick>(OnTickHUD);
+        RegisterListener<Listeners.OnMapStart>(OnMapStartHandler);
+    }
+
+    private void OnMapStartHandler(string mapName)
+    {
+        // 換地圖時重置狀態
+        _isShowingHud = false;
+        _gameRulesProxy = null;
+    }
+
+    // 寫一個測試指令方便你在遊戲內直接測試 (控制台輸入 css_testhud 10)
+    [ConsoleCommand("css_testhud", "測試 HUD 倒數")]
+    [CommandHelper(minArgs: 1, usage: "<秒數>")]
+    public void OnTestHudCommand(CCSPlayerController? caller, CommandInfo info)
+    {
+        if (!float.TryParse(info.GetArg(1), out float duration))
         {
-            if (p != null && p.IsValid && !p.IsBot && !p.IsHLTV)
-            {
-                _hudTargetPlayers.Add(p); // 加入發送名單
-            }
+            info.ReplyToCommand("請輸入有效的數字做為秒數。");
+            return;
+        }
+
+        StartHudCountdown(duration);
+        
+        if (caller != null)
+        {
+            caller.PrintToChat($"[LiteHud] 開始 {duration} 秒的 HUD 倒數測試！");
         }
     }
 
-    private void HandleHudTick()
+    public void StartHudCountdown(float duration)
     {
-        // 如果沒有要顯示，直接 return，不佔用任何運算資源
-        if (!_isShowingHud) return;
+        _isShowingHud = true;
+        _hudEndTime = Server.CurrentTime + duration;
+
+        // 1. 完全照抄 ServerGraphic 的做法：利用 AddTimer 來控制精準關閉
+        AddTimer(duration, () =>
+        {
+            _isShowingHud = false;
+        });
+    }
+
+    public void OnTickHUD()
+    {
+        // 2. 照抄 ServerGraphic 顯示的做法：只要開關是 true，每一個 Tick 就持續發送
+        if (_isShowingHud)
+        {
+            // 計算剩下的秒數
+            int remainingSeconds = (int)Math.Ceiling(_hudEndTime - Server.CurrentTime);
+            
+            // 避免微小延遲導致顯示 0 
+            if (remainingSeconds < 1) remainingSeconds = 1;
+
+            string hudText = $"倒數: {remainingSeconds} 秒"; 
+
+            foreach (var player in Utilities.GetPlayers())
+            {
+                if (!IsPlayerValid(player))
+                    continue;
+
+                // 發送純文字
+                player.PrintToCenterHtml(hudText);
+            }
+        }
+
+        // 3. 照抄 ServerGraphic OnTick 後半段的強制刷新 UI 黑魔法邏輯
+        _runThisTick = !_runThisTick;
+
+        if (!_runThisTick) return;
+
+        var proxy = GetGameRulesProxy();
+
+        if (proxy == null || !proxy.IsValid) return;
+
+        var gameRules = proxy.GameRules;
+        if (gameRules == null) return;
+
+        if (gameRules.WarmupPeriod) return;
 
         float currentTime = Server.CurrentTime;
-        
-  // 【階段一：時間到，發送零尺寸區塊強制抹除】
-        if (currentTime >= _hudEndTime)
+        float restartTime = gameRules.RestartRoundTime;
+
+        bool expectedState = restartTime < currentTime;
+
+        if (gameRules.GameRestart != expectedState)
         {
-            _isShowingHud = false; 
-            
-            foreach (var p in _hudTargetPlayers)
-            {
-                if (p != null && p.IsValid) 
-                {
-                    // 終極解法：發送長寬為 0 的 div，不給 CS2 引擎畫黑底框的空間
-                    p.PrintToCenterHtml("<div style='width: 0px; height: 0px;'></div>");
-                }
-            }
-            
-            _hudTargetPlayers.Clear(); 
-            return;
+            gameRules.GameRestart = expectedState;
+            Utilities.SetStateChanged(proxy, "CCSGameRulesProxy", "m_pGameRules");
         }
-        
-        // 【階段二：倒數中，只有「秒數改變」才對名單發送】
-        int remaining = (int)Math.Ceiling(_hudEndTime - currentTime);
-        
-        // 只有當數字跳動時 (例如 15 變 14)，才組裝字串並發送
-        if (remaining != _lastRemainingSeconds)
+    }
+
+    // 照抄 ServerGraphic 的 Helper 函數，確保 GetGameRulesProxy 能正常運作
+    private CCSGameRulesProxy? GetGameRulesProxy()
+    {
+        if (_gameRulesProxy != null && _gameRulesProxy.IsValid)
         {
-            _lastRemainingSeconds = remaining;
-            string countdownLine = string.Format(Config.HudHtml_Countdown, remaining);
-            string currentRenderedHud = _cachedHudBaseHtml + countdownLine;
-            
-            foreach (var p in _hudTargetPlayers)
-            {
-                // 僅保留最後一道安全防線：防範這幾秒內剛好有人斷線
-                if (p != null && p.IsValid) 
-                {
-                    p.PrintToCenterHtml(currentRenderedHud);
-                }
-            }
+            return _gameRulesProxy;
         }
+
+        foreach (var entity in Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules"))
+        {
+            _gameRulesProxy = entity;
+            return _gameRulesProxy;
+        }
+
+        _gameRulesProxy = null;
+        return null;
+    }
+
+    public static bool IsPlayerValid(CCSPlayerController? player)
+    {
+        return player != null
+            && player.IsValid
+            && !player.IsBot
+            && player.Pawn != null
+            && player.Pawn.IsValid
+            && player.Connected == PlayerConnectedState.Connected
+            && !player.IsHLTV;
     }
 }

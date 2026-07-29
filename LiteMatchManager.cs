@@ -334,7 +334,7 @@ private CCSGameRulesProxy? _gameRulesProxy;
         _liveTimer = null;
 
         string abortString = $"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}<br>";
-        ShowHudWithCountdown(abortString, Config.HudDuration_MatchAbort);
+        StartHudCountdown(abortString, Config.HudDuration_MatchAbort);
 
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}玩 家 離 退 對 戰 終 止，請 重 新 輸 入 {ChatColors.Lime}!R {ChatColors.Orange}對 戰");
         Server.ExecuteCommand("mp_warmup_start");
@@ -535,7 +535,7 @@ private CCSGameRulesProxy? _gameRulesProxy;
             prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
         }
 
-        ShowHudWithCountdown(prepString, Config.HudDuration_Prep);
+        StartHudCountdown(prepString, Config.HudDuration_Prep);
 
         CheckMatchStart();
 
@@ -586,7 +586,7 @@ private CCSGameRulesProxy? _gameRulesProxy;
                 prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
             }
 
-            ShowHudWithCountdown(prepString, Config.HudDuration_Prep);
+            StartHudCountdown(prepString, Config.HudDuration_Prep);
         }
     }
 
@@ -617,7 +617,7 @@ private CCSGameRulesProxy? _gameRulesProxy;
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
             string hudStartText = $"{Config.HudHtml_Round1_Line1}<br>{Config.HudHtml_Round1_Line2}<br>";
-            ShowHudWithCountdown(hudStartText, Config.HudDuration_Round1);
+            StartHudCountdown(hudStartText, Config.HudDuration_Round1);
 
             Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 家 已 準 備，{modeText} 比 賽 開 始");
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}２０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");

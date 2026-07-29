@@ -47,11 +47,12 @@ public partial class LiteMatchManager
             
             // 修正「遮擋框」：不能發送空白鍵 " "，這會產生黑底框。
             // 必須發送完全空字串 "" (裡面什麼都不要有)，才能讓 CS2 徹底撤銷該 UI 元素
-            foreach (var p in _hudTargetPlayers)
+           foreach (var p in _hudTargetPlayers)
             {
                 if (p != null && p.IsValid) 
                 {
-                    p.PrintToCenterHtml(""); 
+                    // ✅ 發送長寬皆為 0 的區塊，並塞入零寬度空白字元 (&#8203;) 強制刷新引擎
+                    p.PrintToCenterHtml("<div style='width: 0px; height: 0px;'>&#8203;</div>"); 
                 }
             }
             

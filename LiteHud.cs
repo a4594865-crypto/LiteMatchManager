@@ -4,6 +4,7 @@ using System;
 
 namespace LiteMatchManager;
 
+// 注意這裡加了 partial，代表它是 LiteMatchManager 的一部分
 public partial class LiteMatchManager
 {
     // === 動態 HUD 秒數的控制變數 ===
@@ -27,45 +28,31 @@ public partial class LiteMatchManager
     private void HandleHudTick()
     {
         _runThisTickHud = !_runThisTickHud; // 降低一半的 Tick 處理頻率
-        if (_runThisTickHud)
+        if (_runThisTickHud && _isShowingHud)
         {
-            if (_isShowingHud)
+            float currentTime = Server.CurrentTime;
+            if (currentTime >= _hudEndTime)
             {
-                float currentTime = Server.CurrentTime;
+                _isShowingHud = false; // 時間到，停止推播 HUD
+            }
+            else
+            {
+                // 計算剩餘的整數秒數
+                int remaining = (int)Math.Ceiling(_hudEndTime - currentTime);
                 
-                // 【關鍵修復】如果時間到了，立即強制清除畫面
-                if (currentTime >= _hudEndTime)
+                // 只有當秒數「改變」時，才重新組裝字串
+                if (remaining != _lastRemainingSeconds)
                 {
-                    _isShowingHud = false; // 標記為停止推播
-                    
-                    // 發送一格空白字串 " "，強制消除 CS2 原生殘留 5 秒的機制
-                    foreach (var p in Utilities.GetPlayers())
-                    {
-                        if (p != null && p.IsValid && !p.IsBot) 
-                        {
-                            p.PrintToCenterHtml(" "); 
-                        }
-                    }
+                    _lastRemainingSeconds = remaining;
+                    string countdownLine = string.Format(Config.HudHtml_Countdown, remaining);
+                    _currentRenderedHud = _cachedHudBaseHtml + countdownLine;
                 }
-                else
+                
+                // 將最新的 HTML 畫面推給所有有效玩家
+                foreach (var p in Utilities.GetPlayers())
                 {
-                    // 計算剩餘的整數秒數
-                    int remaining = (int)Math.Ceiling(_hudEndTime - currentTime);
-                    
-                    // 只有當秒數「改變」時，才重新組裝字串
-                    if (remaining != _lastRemainingSeconds)
-                    {
-                        _lastRemainingSeconds = remaining;
-                        string countdownLine = string.Format(Config.HudHtml_Countdown, remaining);
-                        _currentRenderedHud = _cachedHudBaseHtml + countdownLine;
-                    }
-                    
-                    // 將最新的 HTML 畫面推給所有有效玩家
-                    foreach (var p in Utilities.GetPlayers())
-                    {
-                        if (p != null && p.IsValid && !p.IsBot) 
-                            p.PrintToCenterHtml(_currentRenderedHud);
-                    }
+                    if (p != null && p.IsValid && !p.IsBot) 
+                        p.PrintToCenterHtml(_currentRenderedHud);
                 }
             }
         }

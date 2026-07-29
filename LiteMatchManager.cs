@@ -20,6 +20,10 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteConfig>
     public override string ModuleVersion => "8.54_Config_Rename";
     public override string ModuleAuthor => "Optimized";
     public override string ModuleDescription => "主程式與 HUD、Config 拆分版";
+    public bool _isShowingHud = false;
+private bool _runThisTick = false;
+private float _hudEndTime = 0f;
+private CCSGameRulesProxy? _gameRulesProxy;
 
     public LiteConfig Config { get; set; } = new LiteConfig();
 

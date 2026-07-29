@@ -17,7 +17,7 @@ namespace LiteMatchManager;
 public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.55_Config_Rename";
+    public override string ModuleVersion => "8.54_Config_Rename";
     public override string ModuleAuthor => "Optimized";
     public override string ModuleDescription => "主程式與 HUD、Config 拆分版";
 
@@ -37,13 +37,6 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteConfig>
     private int _liveMatchTargetPlayers = 0; 
     private bool _isServerShuttingDown = false; 
     
-    // 新版 HUD 相關變數
-    public bool _isShowingHud = false;
-    private bool _runThisTick = false;
-    private float _hudEndTime = 0f;
-    private string _currentHudText = "";
-    private CCSGameRulesProxy? _gameRulesProxy;
-
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
@@ -62,8 +55,8 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteConfig>
 
     private void OnTick()
     {
-        // 呼叫新版 HUD 渲染與強制刷新機制
-        OnTickHUD();
+        // 呼叫 LiteHud.cs 裡的 HUD 渲染與倒數邏輯
+        HandleHudTick();
 
         if (!_gameRulesInitialized) InitializeGameRules();
 
@@ -113,84 +106,6 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteConfig>
         }
     }
 
-    // ==========================================
-    // 新增：高效 HUD 與引擎狀態同步方法
-    // ==========================================
-    public void StartHudCountdown(string text, float duration)
-    {
-        _currentHudText = text;
-        _isShowingHud = true;
-        _hudEndTime = Server.CurrentTime + duration;
-
-        AddTimer(duration, () =>
-        {
-            _isShowingHud = false;
-        });
-    }
-
-    public void OnTickHUD()
-    {
-        if (_isShowingHud)
-        {
-            foreach (var player in Utilities.GetPlayers())
-            {
-                if (!IsPlayerValid(player))
-                    continue;
-
-                player.PrintToCenterHtml(_currentHudText);
-            }
-        }
-
-        _runThisTick = !_runThisTick;
-
-        if (!_runThisTick) return;
-
-        var proxy = GetGameRulesProxy();
-
-        if (proxy == null || !proxy.IsValid) return;
-
-        var gameRules = proxy.GameRules;
-        if (gameRules == null) return;
-
-        if (gameRules.WarmupPeriod) return;
-
-        float currentTime = Server.CurrentTime;
-        float restartTime = gameRules.RestartRoundTime;
-
-        bool expectedState = restartTime < currentTime;
-
-        if (gameRules.GameRestart != expectedState)
-        {
-            gameRules.GameRestart = expectedState;
-            Utilities.SetStateChanged(proxy, "CCSGameRulesProxy", "m_pGameRules");
-        }
-    }
-
-    private CCSGameRulesProxy? GetGameRulesProxy()
-    {
-        if (_gameRulesProxy != null && _gameRulesProxy.IsValid)
-        {
-            return _gameRulesProxy;
-        }
-
-        foreach (var entity in Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules"))
-        {
-            _gameRulesProxy = entity;
-            return _gameRulesProxy;
-        }
-
-        _gameRulesProxy = null;
-        return null;
-    }
-
-public static bool IsPlayerValid(CCSPlayerController? player)
-{
-    return player != null
-        && player.IsValid
-        && player.Handle != IntPtr.Zero
-        && !player.IsBot
-        && !player.IsHLTV;
-}
     public void OnConfigParsed(LiteConfig config)
     {
         Config = config;
@@ -208,7 +123,7 @@ public static bool IsPlayerValid(CCSPlayerController? player)
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.55 (檔案拆分版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.54 (檔案拆分版) 啟動！");
         Console.WriteLine("=================================================");
 
         _isServerShuttingDown = false;
@@ -279,7 +194,7 @@ public static bool IsPlayerValid(CCSPlayerController? player)
                     {
                         _readyPlayers.Remove(steamId);
                         if (!_isMatchLive)
-                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 消 準 備");
+                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 configuration 消 準 備");
                         else
                             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 退 出 了 戰 鬥，移 至 觀 戰 ");
                     }
@@ -415,7 +330,7 @@ public static bool IsPlayerValid(CCSPlayerController? player)
         _liveTimer = null;
 
         string abortString = $"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}<br>";
-        StartHudCountdown(abortString, Config.HudDuration_MatchAbort);
+        ShowHudWithCountdown(abortString, Config.HudDuration_MatchAbort);
 
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}玩 家 離 退 對 戰 終 止，請 重 新 輸 入 {ChatColors.Lime}!R {ChatColors.Orange}對 戰");
         Server.ExecuteCommand("mp_warmup_start");
@@ -616,7 +531,7 @@ public static bool IsPlayerValid(CCSPlayerController? player)
             prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
         }
 
-        StartHudCountdown(prepString, Config.HudDuration_Prep);
+        ShowHudWithCountdown(prepString, Config.HudDuration_Prep);
 
         CheckMatchStart();
 
@@ -667,7 +582,7 @@ public static bool IsPlayerValid(CCSPlayerController? player)
                 prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
             }
 
-            StartHudCountdown(prepString, Config.HudDuration_Prep);
+            ShowHudWithCountdown(prepString, Config.HudDuration_Prep);
         }
     }
 
@@ -698,7 +613,7 @@ public static bool IsPlayerValid(CCSPlayerController? player)
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
             string hudStartText = $"{Config.HudHtml_Round1_Line1}<br>{Config.HudHtml_Round1_Line2}<br>";
-            StartHudCountdown(hudStartText, Config.HudDuration_Round1);
+            ShowHudWithCountdown(hudStartText, Config.HudDuration_Round1);
 
             Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 家 已 準 備，{modeText} 比 賽 開 始");
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}２０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
@@ -953,6 +868,7 @@ public static bool IsPlayerValid(CCSPlayerController? player)
         
         // 清除 HUD 狀態
         _isShowingHud = false;
+        _currentRenderedHud = "";
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

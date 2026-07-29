@@ -41,13 +41,21 @@ public partial class LiteMatchManager
 
         float currentTime = Server.CurrentTime;
         
-        // 【階段一：時間到，完全停止發送】
+       // 【階段一：時間到，發送透明文字強制抹除】
         if (currentTime >= _hudEndTime)
         {
-            _isShowingHud = false; // 停止 HUD 邏輯
-            _hudTargetPlayers.Clear(); // 顯示結束後，清空名單釋放伺服器資源
+            _isShowingHud = false; 
             
-            // 💡 什麼都不發送，讓 CS2 引擎自然且乾淨地關閉 HUD
+            // 在清空名單之前，對著所有人發送「透明度為 0」的隱形字，瞬間切斷殘影
+            foreach (var p in _hudTargetPlayers)
+            {
+                if (p != null && p.IsValid) 
+                {
+                    p.PrintToCenterHtml("<span style='opacity: 0;'>&#8203;</span>");
+                }
+            }
+            
+            _hudTargetPlayers.Clear(); // 確保推播完隱形字後，再清空名單釋放伺服器資源
             return;
         }
         

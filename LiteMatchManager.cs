@@ -14,14 +14,14 @@ namespace LiteMatchManager;
 
 #pragma warning disable CS8618
 
-public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
+public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.54_HUD_ConfigSplit";
+    public override string ModuleVersion => "8.54_Config_Rename";
     public override string ModuleAuthor => "Optimized";
     public override string ModuleDescription => "主程式與 HUD、Config 拆分版";
 
-    public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
+    public LiteConfig Config { get; set; } = new LiteConfig();
 
     private string _cachedPrefix = "";
     private HashSet<ulong> _readyPlayers = new(64);
@@ -106,7 +106,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
         }
     }
 
-    public void OnConfigParsed(LiteMatchConfig config)
+    public void OnConfigParsed(LiteConfig config)
     {
         Config = config;
         _cachedPrefix = config.ChatPrefix
@@ -194,7 +194,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
                     {
                         _readyPlayers.Remove(steamId);
                         if (!_isMatchLive)
-                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 消 準 備");
+                            Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 跳 去 觀 戰，已 取 configuration 消 準 備");
                         else
                             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}{player.PlayerName}{ChatColors.White} 退 出 了 戰 鬥，移 至 觀 戰 ");
                     }

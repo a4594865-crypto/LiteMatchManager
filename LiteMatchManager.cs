@@ -75,7 +75,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override string ModuleName => "LiteMatchManager";
     public override string ModuleVersion => "8.53_UltimateFix";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "純 8.53 版 + 20勝免死金牌 (完美防卡圖)";
+    public override string ModuleDescription => "純 8.53 版 + 20勝免死金牌 (完美防卡圖) + 轉發聊天";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -356,7 +356,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             if (!_isMatchLive || _isChangingMap) return; 
             try 
             {
-                // ✨ 完美填補這 2 秒死角的「分數攔截」
                 var teams = Utilities.FindAllEntitiesByDesignerName<CCSTeam>("cs_team_manager");
                 if (teams != null)
                 {
@@ -365,7 +364,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
                     if (tTeam != null && ctTeam != null)
                     {
-                        // 只要有任何一方達到 20 勝，就算結算面板還沒出來，也絕對不准觸發 AbortMatch！
                         if (ctTeam.Score >= 20 || tTeam.Score >= 20) return; 
                     }
                 }
@@ -473,11 +471,36 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         {
             char c = rawArg[i];
             if (c == '"' || c == ' ') continue; 
-            if (c == '!') { isCommand = true; break; }
+            if (c == '!' || c == '/') { isCommand = true; break; } // 加入了 '/' 以相容指令判斷
             break; 
         }
 
-        if (!isCommand) return HookResult.Continue; 
+        if (!isCommand) 
+        {
+            // === 完美移植：轉發聊天邏輯 ===
+            string message = rawArg.Trim('"', ' '); 
+            if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
+
+            string playerName = player.PlayerName;
+            string senderPrefix = $" {ChatColors.White}[所有人]{ChatColors.White}";
+            string nameColor = $"{ChatColors.White}";
+
+            if (player.TeamNum == 1) nameColor = $"{ChatColors.Grey}";               
+            else if (player.TeamNum == 2) nameColor = $"\x10";                
+            else if (player.TeamNum == 3) nameColor = $"\x0B";                
+
+            string formattedMessage = $"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}";
+
+            var allPlayers = Utilities.GetPlayers().Where(p => p != null && p.IsValid && !p.IsBot);
+            foreach (var p in allPlayers)
+            {
+                p.PrintToChat(formattedMessage);
+            }
+
+            return HookResult.Handled; 
+            // === 轉發聊天邏輯結束 ===
+        }
+
         string command = rawArg.Trim('"', ' ').ToLower();
 
         if (command == "!nextmap")

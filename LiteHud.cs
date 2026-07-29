@@ -41,21 +41,21 @@ public partial class LiteMatchManager
 
         float currentTime = Server.CurrentTime;
         
-       // 【階段一：時間到，發送透明文字強制抹除】
+  // 【階段一：時間到，發送零尺寸區塊強制抹除】
         if (currentTime >= _hudEndTime)
         {
             _isShowingHud = false; 
             
-            // 在清空名單之前，對著所有人發送「透明度為 0」的隱形字，瞬間切斷殘影
             foreach (var p in _hudTargetPlayers)
             {
                 if (p != null && p.IsValid) 
                 {
-                    p.PrintToCenterHtml("<span style='opacity: 0;'>&#8203;</span>");
+                    // 終極解法：發送長寬為 0 的 div，不給 CS2 引擎畫黑底框的空間
+                    p.PrintToCenterHtml("<div style='width: 0px; height: 0px;'></div>");
                 }
             }
             
-            _hudTargetPlayers.Clear(); // 確保推播完隱形字後，再清空名單釋放伺服器資源
+            _hudTargetPlayers.Clear(); 
             return;
         }
         

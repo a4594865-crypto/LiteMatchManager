@@ -7,10 +7,6 @@ namespace LiteMatchManager;
 
 public partial class LiteMatchManager
 {
-    // === GameRules 底層 Hack 變數 ===
-    private CCSGameRules? _gameRules;
-    private bool _gameRulesInitialized = false;
-
     // === 動態 HUD 控制變數 ===
     private bool _isShowingHud = false;
     private float _hudEndTime = 0f;
@@ -19,20 +15,6 @@ public partial class LiteMatchManager
     private int _lastRemainingSeconds = -1;
     private bool _runThisTickHud = false; 
     private bool _hasSentFinalMessage = false; 
-
-    // 初始化 GameRules 代理實體
-    private void InitializeGameRules()
-    {
-        if (_gameRulesInitialized) return;
-        
-        // 抓取全域的 cs_gamerules 實體 
-        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
-        _gameRules = gameRulesProxy?.GameRules;
-        _gameRulesInitialized = _gameRules != null;
-    }
-
-    // ★重要：請確保在你的 OnMapStart 事件中有加上這行，以防換圖時實體指標失效
-    // _gameRulesInitialized = false;
 
     private void ShowHudWithCountdown(string baseHtml, int durationSeconds)
     {
@@ -72,8 +54,6 @@ public partial class LiteMatchManager
             {
                 if (!_hasSentFinalMessage)
                 {
-                    // 此時發送空字串，由於上面的 GameRules 狀態已被強制刷新，
-                    // 引擎很有可能會判定為狀態重置，將文字與「黑底框」一併瞬間擊碎！
                     string clearHtml = ""; 
                     
                     foreach (var p in Utilities.GetPlayers())

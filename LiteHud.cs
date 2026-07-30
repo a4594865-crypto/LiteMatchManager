@@ -14,12 +14,16 @@ public partial class LiteMatchManager
     private int _lastRemainingSeconds = -1;
     private bool _runThisTickHud = false; 
 
+    // 新增：用來記錄是否已經發送過「空字串」清除畫面
+    private bool _hasSentFinalMessage = false; 
+
     // HUD 推播觸發器
     private void ShowHudWithCountdown(string baseHtml, int durationSeconds)
     {
         _cachedHudBaseHtml = baseHtml;
         _hudEndTime = Server.CurrentTime + durationSeconds;
         _isShowingHud = true;
+        _hasSentFinalMessage = false; // 每次呼叫新 HUD 時都要重置
         _lastRemainingSeconds = -1; // 強制重置，讓 OnTick 立即更新字串
     }
 
@@ -30,8 +34,25 @@ public partial class LiteMatchManager
         if (_runThisTickHud && _isShowingHud)
         {
             float currentTime = Server.CurrentTime;
+            
+            // 當前時間已經大於等於設定的結束時間 (時間到！)
             if (currentTime >= _hudEndTime)
             {
+                if (!_hasSentFinalMessage)
+                {
+                    // 【塌陷覆蓋大法】：發送空字串，讓黑框失去支撐瞬間縮小為 0
+                    string clearHtml = ""; 
+                    
+                    // 將清除指令推給所有有效玩家
+                    foreach (var p in Utilities.GetPlayers())
+                    {
+                        if (p != null && p.IsValid && !p.IsBot) 
+                            p.PrintToCenterHtml(clearHtml);
+                    }
+                    
+                    _hasSentFinalMessage = true; // 標記已發送，確保只發送一次
+                }
+                
                 _isShowingHud = false; // 時間到，停止推播 HUD
             }
             else

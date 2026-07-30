@@ -39,15 +39,6 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("MapList")] 
     public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
 
-    // 各個 HUD 的專屬顯示秒數設定
-    [JsonPropertyName("HudDuration_Prep")] public int HudDuration_Prep { get; set; } = 15;
-    [JsonPropertyName("HudDuration_MatchAbort")] public int HudDuration_MatchAbort { get; set; } = 5;
-    [JsonPropertyName("HudDuration_Round1")] public int HudDuration_Round1 { get; set; } = 8;
-    
-    // 共用的秒數倒數排版
-    [JsonPropertyName("HudHtml_Countdown")] 
-    public string HudHtml_Countdown { get; set; } = "<font class='fontSize-m' color='gray'>視窗關閉倒數：{0} 秒</font>";
-
     [JsonPropertyName("HudHtml_Prep1v1_Line1")] 
     public string HudHtml_Prep1v1_Line1 { get; set; } = "<font class='fontSize-l' color='white'>✦ 觸 發 1 v 1 單 挑 ✦</font>";
     
@@ -79,12 +70,12 @@ public class LiteMatchConfig : BasePluginConfig
     public string HudHtml_Round1_Line2 { get; set; } = "<font class='fontSize-l' color='white'>率 先 取 得 </font><font class='fontSize-xxl' color='lime'><b>２０</b></font><font class='fontSize-xxl' color='white'> 勝 者 為 贏 家</font>";
 }
 
-public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
+public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.54_HUD_Split";
+    public override string ModuleVersion => "8.53_UltimateFix";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "主程式與 HUD 拆分模組化版本";
+    public override string ModuleDescription => "純 8.53 版 + 20勝免死金牌 (完美防卡圖) + 轉發聊天";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -118,11 +109,16 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
         _gameRulesInitialized = _gameRules != null;
     }
 
+    private void ShowHud(string html)
+    {
+        foreach (var p in Utilities.GetPlayers())
+        {
+            if (p != null && p.IsValid && !p.IsBot) p.PrintToCenterHtml(html);
+        }
+    }
+
     private void OnTick()
     {
-        // 呼叫另一個檔案 (LiteMatchManager.Hud.cs) 裡的 HUD 渲染與倒數邏輯
-        HandleHudTick();
-
         if (!_gameRulesInitialized) InitializeGameRules();
 
         if (_gameRules != null)
@@ -188,7 +184,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.54 (拆分模組化版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.53 (究極防卡圖 20勝版) 啟動！");
         Console.WriteLine("=================================================");
 
         _isServerShuttingDown = false;
@@ -394,8 +390,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
         _liveTimer?.Kill();
         _liveTimer = null;
 
-        string abortString = $"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}<br>";
-        ShowHudWithCountdown(abortString, Config.HudDuration_MatchAbort);
+        ShowHud($"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}<br>");
 
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}玩 家 離 退 對 戰 終 止，請 重 新 輸 入 {ChatColors.Lime}!R {ChatColors.Orange}對 戰");
         Server.ExecuteCommand("mp_warmup_start");
@@ -476,12 +471,13 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
         {
             char c = rawArg[i];
             if (c == '"' || c == ' ') continue; 
-            if (c == '!' || c == '/') { isCommand = true; break; } 
+            if (c == '!' || c == '/') { isCommand = true; break; } // 加入了 '/' 以相容指令判斷
             break; 
         }
 
         if (!isCommand) 
         {
+            // === 完美移植：轉發聊天邏輯 ===
             string message = rawArg.Trim('"', ' '); 
             if (string.IsNullOrWhiteSpace(message)) return HookResult.Continue;
 
@@ -502,6 +498,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
             }
 
             return HookResult.Handled; 
+            // === 轉發聊天邏輯結束 ===
         }
 
         string command = rawArg.Trim('"', ' ').ToLower();
@@ -576,6 +573,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
 
         _readyPlayers.Add(steamId);
         _playerUnreadyTime.Remove(steamId); 
+        
         _pendingInitialReminders.Remove(steamId); 
 
         int targetPlayers = GetDynamicRequiredPlayers();
@@ -596,7 +594,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
             prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
         }
 
-        ShowHudWithCountdown(prepString, Config.HudDuration_Prep);
+        ShowHud(prepString);
 
         CheckMatchStart();
 
@@ -647,7 +645,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
                 prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
             }
 
-            ShowHudWithCountdown(prepString, Config.HudDuration_Prep);
+            ShowHud(prepString);
         }
     }
 
@@ -678,7 +676,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
             string hudStartText = $"{Config.HudHtml_Round1_Line1}<br>{Config.HudHtml_Round1_Line2}<br>";
-            ShowHudWithCountdown(hudStartText, Config.HudDuration_Round1);
+            ShowHud(hudStartText);
 
             Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 家 已 準 備，{modeText} 比 賽 開 始");
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}２０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
@@ -762,6 +760,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
         {
             case "!ssg": _playerPrimary[steamId] = "weapon_ssg08"; ReplaceWeapon(player, "weapon_ssg08"); return true;
             case "!awp": _playerPrimary[steamId] = "weapon_awp"; ReplaceWeapon(player, "weapon_awp"); return true;
+            
             case "!gs": OnGsCommand(player, null!); return true;
         }
         return false;
@@ -925,15 +924,12 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
         _liveMatchTargetPlayers = 0; 
         _readyPlayers.Clear();
         _playerUnreadyTime.Clear();
+
         _pendingInitialReminders.Clear();
         _hasReceivedInitialReminder.Clear();
 
         _liveTimer?.Kill();
         _liveTimer = null;
-        
-        // 清除 HUD 狀態
-        _isShowingHud = false;
-        _currentRenderedHud = "";
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

@@ -39,12 +39,10 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("MapList")] 
     public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
 
-    // 各個 HUD 的專屬顯示秒數設定
     [JsonPropertyName("HudDuration_Prep")] public int HudDuration_Prep { get; set; } = 15;
     [JsonPropertyName("HudDuration_MatchAbort")] public int HudDuration_MatchAbort { get; set; } = 5;
     [JsonPropertyName("HudDuration_Round1")] public int HudDuration_Round1 { get; set; } = 8;
     
-    // 共用的秒數倒數排版
     [JsonPropertyName("HudHtml_Countdown")] 
     public string HudHtml_Countdown { get; set; } = "<font class='fontSize-m' color='gray'>視窗關閉倒數：{0} 秒</font>";
 
@@ -82,9 +80,9 @@ public class LiteMatchConfig : BasePluginConfig
 public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.54_HUD_Split";
+    public override string ModuleVersion => "8.55_HUD_Ultimate";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "主程式與 HUD 拆分模組化版本";
+    public override string ModuleDescription => "主程式與 HUD 完美整合版 (防殘影)";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -102,6 +100,15 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
     private int _liveMatchTargetPlayers = 0; 
     private bool _isServerShuttingDown = false; 
     
+    // ==========================================
+    // HUD 控制變數
+    // ==========================================
+    public bool _isShowingHud = false;
+    private float _hudEndTime = 0f;
+    private string _cachedHudBaseHtml = "";
+    private int _lastRemainingSeconds = -1;
+    private CCSGameRulesProxy? _gameRulesProxy;
+
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
@@ -120,12 +127,12 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
 
     private void OnTick()
     {
-        // 呼叫另一個檔案 (LiteMatchManager.Hud.cs) 裡的 HUD 渲染與倒數邏輯
-        HandleHudTick();
+        // 呼叫全新的 HUD 渲染與倒數邏輯
+        OnTickHUD();
 
         if (!_gameRulesInitialized) InitializeGameRules();
 
-        if (_gameRules != null)
+        if (_gameRules != null && !_isShowingHud) // 確保沒顯示 HUD 時，正常更新狀態
         {
             _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
         }
@@ -171,6 +178,100 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
         }
     }
 
+    // ==========================================
+    // 終極完美 HUD 邏輯
+    // ==========================================
+    public void StartHudCountdown(string baseHtml, float duration)
+    {
+        _cachedHudBaseHtml = baseHtml;
+        _hudEndTime = Server.CurrentTime + duration;
+        _isShowingHud = true;
+        _lastRemainingSeconds = -1; 
+    }
+
+    public void OnTickHUD()
+    {
+        if (!_isShowingHud) return;
+
+        float currentTime = Server.CurrentTime;
+        var proxy = GetGameRulesProxy();
+        var gameRules = proxy?.GameRules;
+
+        // 時間到：徹底清除黑框
+        if (currentTime >= _hudEndTime)
+        {
+            _isShowingHud = false;
+
+            foreach (var player in Utilities.GetPlayers())
+            {
+                if (IsPlayerValid(player))
+                {
+                    player.PrintToCenter(" "); 
+                }
+            }
+
+            if (gameRules != null)
+            {
+                float restartTime = gameRules.RestartRoundTime;
+                gameRules.GameRestart = restartTime < currentTime;
+                Utilities.SetStateChanged(proxy, "CCSGameRulesProxy", "m_pGameRules");
+            }
+            return;
+        }
+
+        int remaining = (int)Math.Ceiling(_hudEndTime - currentTime);
+        if (remaining < 1) remaining = 1;
+
+        if (remaining != _lastRemainingSeconds)
+        {
+            _lastRemainingSeconds = remaining;
+            
+            string countdownLine = string.Format(Config.HudHtml_Countdown, remaining);
+            string currentRenderedHud = _cachedHudBaseHtml + countdownLine;
+
+            foreach (var player in Utilities.GetPlayers())
+            {
+                if (IsPlayerValid(player))
+                {
+                    player.PrintToCenterHtml(currentRenderedHud);
+                }
+            }
+        }
+
+        if (gameRules != null)
+        {
+            if (!gameRules.GameRestart)
+            {
+                gameRules.GameRestart = true;
+                Utilities.SetStateChanged(proxy, "CCSGameRulesProxy", "m_pGameRules");
+            }
+        }
+    }
+
+    private CCSGameRulesProxy? GetGameRulesProxy()
+    {
+        if (_gameRulesProxy != null && _gameRulesProxy.IsValid)
+        {
+            return _gameRulesProxy;
+        }
+        foreach (var entity in Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules"))
+        {
+            _gameRulesProxy = entity;
+            return _gameRulesProxy;
+        }
+        _gameRulesProxy = null;
+        return null;
+    }
+
+    public static bool IsPlayerValid(CCSPlayerController? player)
+    {
+        return player != null
+            && player.IsValid
+            && player.Handle != IntPtr.Zero
+            && !player.IsBot
+            && !player.IsHLTV;
+    }
+
     public void OnConfigParsed(LiteMatchConfig config)
     {
         Config = config;
@@ -188,7 +289,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.54 (拆分模組化版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.55 (完美整合版) 啟動！");
         Console.WriteLine("=================================================");
 
         _isServerShuttingDown = false;
@@ -395,7 +496,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
         _liveTimer = null;
 
         string abortString = $"{Config.HudHtml_MatchAbort_Line1}<br>{Config.HudHtml_MatchAbort_Line2}<br>";
-        ShowHudWithCountdown(abortString, Config.HudDuration_MatchAbort);
+        StartHudCountdown(abortString, Config.HudDuration_MatchAbort);
 
         Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}玩 家 離 退 對 戰 終 止，請 重 新 輸 入 {ChatColors.Lime}!R {ChatColors.Orange}對 戰");
         Server.ExecuteCommand("mp_warmup_start");
@@ -596,7 +697,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
             prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
         }
 
-        ShowHudWithCountdown(prepString, Config.HudDuration_Prep);
+        StartHudCountdown(prepString, Config.HudDuration_Prep);
 
         CheckMatchStart();
 
@@ -647,7 +748,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
                 prepString = $"{Config.HudHtml_Prep3v3_Line1}<br>{string.Format(Config.HudHtml_Prep3v3_Line2, _readyPlayers.Count, missingPlayers, targetPlayers)}<br>";
             }
 
-            ShowHudWithCountdown(prepString, Config.HudDuration_Prep);
+            StartHudCountdown(prepString, Config.HudDuration_Prep);
         }
     }
 
@@ -678,7 +779,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
             string modeText = totalPlayers == 2 ? "1 v 1 單 挑" : $"{activeT} v {activeCT} 團 戰";
 
             string hudStartText = $"{Config.HudHtml_Round1_Line1}<br>{Config.HudHtml_Round1_Line2}<br>";
-            ShowHudWithCountdown(hudStartText, Config.HudDuration_Round1);
+            StartHudCountdown(hudStartText, Config.HudDuration_Round1);
 
             Server.PrintToChatAll($" {_cachedPrefix} 所 有 玩 家 已 準 備，{modeText} 比 賽 開 始");
             Server.PrintToChatAll($" {_cachedPrefix} {ChatColors.Orange}對 戰 開 始！採 贏{ChatColors.Default} {ChatColors.Green}２０{ChatColors.Default} {ChatColors.Orange}回 合 制{ChatColors.Default}。");
@@ -796,7 +897,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
     private void OnGsCommand(CCSPlayerController? player, CommandInfo info)
     {
         if (player is null || !player.IsValid) return;
-        player.PrintToChat($" {ChatColors.Orange} 禁 用 所 有 小 槍 、請 在 聊 天 欄 位 輸 入 您 要 的 武 器");
+        player.PrintToChat($" {ChatColors.Orange} 禁 用 所 有 小 槍 、請 在 聊 因為 天 欄 位 輸 入 您 要 的 武 器");
         player.PrintToChat($" ---------------------------------------------------------------");
         player.PrintToChat($" [ {ChatColors.Green}狙擊{ChatColors.White} ] {ChatColors.Green}!SSG {ChatColors.White}[ SSG 08 鳥狙 ] 、{ChatColors.Green}!AWP {ChatColors.White}[ AWP狙擊步槍 ]");
     }
@@ -933,7 +1034,6 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
         
         // 清除 HUD 狀態
         _isShowingHud = false;
-        _currentRenderedHud = "";
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);

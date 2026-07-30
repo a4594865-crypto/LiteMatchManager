@@ -1,6 +1,6 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
-using CounterStrikeSharp.API.Modules.Utils; // 確保有 Utilities 可以抓玩家和狀態
+using CounterStrikeSharp.API.Modules.Utils; 
 using System;
 using System.Linq;
 
@@ -14,7 +14,6 @@ public partial class LiteMatchManager
     private string _cachedHudBaseHtml = ""; 
     private string _currentRenderedHud = ""; 
     private int _lastRemainingSeconds = -1;
-    private bool _runThisTickHud = false; 
     
     // 專門給 HUD 用的 GameRules 快取
     private CCSGameRulesProxy? _gameRulesProxyHud; 
@@ -28,19 +27,16 @@ public partial class LiteMatchManager
         _lastRemainingSeconds = -1; // 強制重置，讓 OnTick 立即更新字串
     }
 
-    // 專門處理 HUD 的 Tick 邏輯 (會被主檔案的 OnTick 呼叫)[cite: 2]
+    // 專門處理 HUD 的 Tick 邏輯 (會被主檔案的 OnTick 呼叫)
     private void HandleHudTick()
     {
-        _runThisTickHud = !_runThisTickHud; // 降低一半的 Tick 處理頻率[cite: 2]
-        if (!_runThisTickHud) return;
-
-        // 1. 處理 HUD 顯示
+        // 1. 處理 HUD 顯示 (移除降頻，每一 Tick 皆執行)
         if (_isShowingHud)
         {
             float currentTime = Server.CurrentTime;
             if (currentTime >= _hudEndTime)
             {
-                _isShowingHud = false; // 時間到，停止推播 HUD[cite: 2]
+                _isShowingHud = false; // 時間到，停止推播 HUD
                 
                 // 時間到時，自動清空所有玩家的畫面，避免殘留
                 foreach (var p in Utilities.GetPlayers())
@@ -51,10 +47,10 @@ public partial class LiteMatchManager
             }
             else
             {
-                // 計算剩餘的整數秒數[cite: 2]
+                // 計算剩餘的整數秒數
                 int remaining = (int)Math.Ceiling(_hudEndTime - currentTime);
                 
-                // 只有當秒數「改變」時，才重新組裝字串[cite: 2]
+                // 只有當秒數「改變」時，才重新組裝字串
                 if (remaining != _lastRemainingSeconds)
                 {
                     _lastRemainingSeconds = remaining;
@@ -62,7 +58,7 @@ public partial class LiteMatchManager
                     _currentRenderedHud = _cachedHudBaseHtml + countdownLine;
                 }
                 
-                // 將最新的 HTML 畫面推給所有有效玩家[cite: 2]
+                // 將最新的 HTML 畫面推給所有有效玩家
                 foreach (var p in Utilities.GetPlayers())
                 {
                     if (p != null && p.IsValid && !p.IsBot) 

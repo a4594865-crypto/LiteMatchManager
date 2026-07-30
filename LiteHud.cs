@@ -23,26 +23,41 @@ public partial class LiteMatchManager
         _lastRemainingSeconds = -1; // 強制重置，讓 OnTick 立即更新字串
     }
 
-   // 專門處理 HUD 的 Tick 邏輯 (會被主檔案的 OnTick 呼叫)
+ // 專門處理 HUD 的 Tick 邏輯 (會被主檔案的 OnTick 呼叫)
     private void HandleHudTick()
     {
         if (_isShowingHud)
         {
+            // 【黑魔法一：防閃爍 (Anti-Flash)】
+            // 在 HUD 顯示期間，持續欺騙引擎處於 GameRestart 狀態
+            // 藉此壓制原生暖身 UI，讓每秒更新的倒數計時絕對不閃爍
+            if (_gameRules != null)
+            {
+                _gameRules.GameRestart = true;
+            }
+
             float currentTime = Server.CurrentTime;
             
             if (currentTime >= _hudEndTime)
             {
                 _isShowingHud = false; 
                 
-                // 【黑魔法三：GameRestart 強制抹除】
-                // 欺騙引擎目前正在 Restart，瞬間殺死所有 Center HTML (show_survival_respawn_status) 殘留面板
+                // HUD 結束，將 GameRestart 交還給原本的邏輯或設為 false
                 if (_gameRules != null)
                 {
-                    _gameRules.GameRestart = true;
-                    // 在下一個 Frame 立刻還原，避免影響遊戲實際進程
-                    Server.NextFrame(() => {
-                        if (_gameRules != null) _gameRules.GameRestart = false;
-                    });
+                    _gameRules.GameRestart = false; 
+                }
+                
+                // 【黑魔法二：CSS 坍塌大法 (解決 15 秒殘影)】
+                string clearHtml = "<div style='width: 0px; height: 0px;'></div>";
+
+                foreach (var p in _hudTargetPlayers)
+                {
+                    if (p != null && p.IsValid) 
+                    {
+                        p.PrintToCenterHtml(clearHtml);
+                        p.PrintToCenter(" "); // 雙重保險，推擠 Alert 頻道
+                    }
                 }
                 
                 _hudTargetPlayers.Clear(); 
@@ -51,16 +66,14 @@ public partial class LiteMatchManager
             {
                 int remaining = (int)Math.Ceiling(_hudEndTime - currentTime);
                 
-                // 【黑魔法一 & 二：跳過重複發送 (Skip Identical Refreshes)】
-                // 只有當「秒數真的改變」時，才發送一次 HTML
-                // 完全消滅 Panorama UI 的事件積壓，告別那多出來的 5 秒延遲
+                // 【黑魔法三：跳過重複渲染】
+                // 只有秒數跳動時才發送，不塞爆 Panorama 事件佇列
                 if (remaining != _lastRemainingSeconds)
                 {
                     _lastRemainingSeconds = remaining;
                     string countdownLine = string.Format(Config.HudHtml_Countdown, remaining);
                     _currentRenderedHud = _cachedHudBaseHtml + countdownLine;
                     
-                    // 1 秒只發送 1 次
                     foreach (var p in _hudTargetPlayers)
                     {
                         if (p != null && p.IsValid) 
@@ -69,3 +82,4 @@ public partial class LiteMatchManager
                 }
             }
         }
+    }

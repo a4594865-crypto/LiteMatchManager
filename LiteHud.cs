@@ -1,8 +1,9 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using System;
+using System.Collections.Generic;
 
-namespace LiteMatchManager;
+namespace LiteMatchManager; // 宣告命名空間
 
 public partial class LiteMatchManager
 {
@@ -12,7 +13,9 @@ public partial class LiteMatchManager
     private string _cachedHudBaseHtml = ""; 
     private string _currentRenderedHud = ""; 
     private int _lastRemainingSeconds = -1;
-    private bool _runThisTickHud = false; 
+    
+    // 【極限優化核心】專屬的 HUD 推播名單快取
+    private List<CCSPlayerController> _hudTargetPlayers = new List<CCSPlayerController>();
 
     // HUD 推播觸發器
     private void ShowHudWithCountdown(string baseHtml, int durationSeconds)
@@ -20,17 +23,26 @@ public partial class LiteMatchManager
         _cachedHudBaseHtml = baseHtml;
         _hudEndTime = Server.CurrentTime + durationSeconds;
         _isShowingHud = true;
-        _lastRemainingSeconds = -1; // 強制重置，讓 OnTick 立即更新字串
+        _lastRemainingSeconds = -1; // 強制重置
+
+        // 推播開始時，一次性抓取有效玩家，避免後續狂刷 Utilities.GetPlayers()
+        _hudTargetPlayers.Clear();
+        foreach (var p in Utilities.GetPlayers())
+        {
+            if (p != null && p.IsValid && !p.IsBot)
+            {
+                _hudTargetPlayers.Add(p);
+            }
+        }
     }
 
- // 專門處理 HUD 的 Tick 邏輯 (會被主檔案的 OnTick 呼叫)
+    // 專門處理 HUD 的 Tick 邏輯 (會被主檔案的 OnTick 呼叫)
     private void HandleHudTick()
     {
         if (_isShowingHud)
         {
             // 【黑魔法一：防閃爍 (Anti-Flash)】
-            // 在 HUD 顯示期間，持續欺騙引擎處於 GameRestart 狀態
-            // 藉此壓制原生暖身 UI，讓每秒更新的倒數計時絕對不閃爍
+            // 在 HUD 顯示期間，強制佔用 GameRestart 狀態壓制原生 UI
             if (_gameRules != null)
             {
                 _gameRules.GameRestart = true;
@@ -42,13 +54,13 @@ public partial class LiteMatchManager
             {
                 _isShowingHud = false; 
                 
-                // HUD 結束，將 GameRestart 交還給原本的邏輯或設為 false
+                // HUD 結束，歸還 GameRestart 狀態
                 if (_gameRules != null)
                 {
                     _gameRules.GameRestart = false; 
                 }
                 
-                // 【黑魔法二：CSS 坍塌大法 (解決 15 秒殘影)】
+                // 【黑魔法二：CSS 坍塌大法 (強制秒殺 15 秒黑框殘影)】
                 string clearHtml = "<div style='width: 0px; height: 0px;'></div>";
 
                 foreach (var p in _hudTargetPlayers)
@@ -56,10 +68,11 @@ public partial class LiteMatchManager
                     if (p != null && p.IsValid) 
                     {
                         p.PrintToCenterHtml(clearHtml);
-                        p.PrintToCenter(" "); // 雙重保險，推擠 Alert 頻道
+                        p.PrintToCenter(" "); // 雙重保險
                     }
                 }
                 
+                // 清空名單釋放記憶體
                 _hudTargetPlayers.Clear(); 
             }
             else
@@ -67,7 +80,7 @@ public partial class LiteMatchManager
                 int remaining = (int)Math.Ceiling(_hudEndTime - currentTime);
                 
                 // 【黑魔法三：跳過重複渲染】
-                // 只有秒數跳動時才發送，不塞爆 Panorama 事件佇列
+                // 只有秒數跳動時才發送，拒絕 Panorama 事件堆積
                 if (remaining != _lastRemainingSeconds)
                 {
                     _lastRemainingSeconds = remaining;
@@ -83,3 +96,4 @@ public partial class LiteMatchManager
             }
         }
     }
+} // <--- 剛剛報錯通常就是因為最後漏了這一個 Class 結尾的大括號

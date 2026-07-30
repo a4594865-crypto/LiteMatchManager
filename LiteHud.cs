@@ -33,6 +33,19 @@ public partial class LiteMatchManager
             if (currentTime >= _hudEndTime)
             {
                 _isShowingHud = false; // 時間到，停止推播 HUD
+
+                // ==========================================
+                // [Hack] 借鑒 cs2menus (config.h) 框架的解法
+                // 瞬間將 m_bGameRestart 設為 true 來強制清除大逃殺 UI 殘留面板
+                // 使用 NextFrame 避開被主程式 OnTick 同一幀覆蓋的問題
+                // ==========================================
+                Server.NextFrame(() => 
+                {
+                    if (_gameRules != null)
+                    {
+                        _gameRules.GameRestart = true;
+                    }
+                });
             }
             else
             {

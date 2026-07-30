@@ -39,7 +39,6 @@ public class LiteMatchConfig : BasePluginConfig
     [JsonPropertyName("MapList")] 
     public List<string> MapList { get; set; } = ["Aim_redline_vieforit:3290337428", "aimpro_vieforit:3290753343"];
 
-    // 這裡直接幫你把預設值改成 10，以後就算刪除設定檔，重生出來也是 10 秒！
     [JsonPropertyName("HudDuration_Prep")] public int HudDuration_Prep { get; set; } = 10;
     [JsonPropertyName("HudDuration_MatchAbort")] public int HudDuration_MatchAbort { get; set; } = 5;
     [JsonPropertyName("HudDuration_Round1")] public int HudDuration_Round1 { get; set; } = 8;
@@ -78,13 +77,12 @@ public class LiteMatchConfig : BasePluginConfig
     public string HudHtml_Round1_Line2 { get; set; } = "<font class='fontSize-l' color='white'>率 先 取 得 </font><font class='fontSize-xxl' color='lime'><b>２０</b></font><font class='fontSize-xxl' color='white'> 勝 者 為 贏 家</font>";
 }
 
-// 移除 partial，回歸單一檔案架構
 public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 {
     public override string ModuleName => "LiteMatchManager";
-    public override string ModuleVersion => "8.56_HUD_Simple";
+    public override string ModuleVersion => "8.57_AuthorLogic";
     public override string ModuleAuthor => "Optimized";
-    public override string ModuleDescription => "主程式與 HUD 完美整合版 (防殘影直觀版)";
+    public override string ModuleDescription => "完美採用 ServerGraphic 作者邏輯版本";
 
     public LiteMatchConfig Config { get; set; } = new LiteMatchConfig();
 
@@ -103,50 +101,35 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private bool _isServerShuttingDown = false; 
     
     // ==========================================
-    // 回歸最單純的 HUD 控制變數
+    // 嚴格採用作者的 Timer 控制法與 OnTick 邏輯
     // ==========================================
-    private bool _isShowingHud = false;
-    private float _hudEndTime = 0.0f;
-    private int _lastRemainingSeconds = -1;
-    private string _cachedHudBaseHtml = "";
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _hudTimer;
+    private int _hudRemainingSeconds = 0;
+    private string _hudBaseHtml = "";
+    private bool _runThisTick = false; // 作者降低效能消耗的寫法
 
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _waitingTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _liveTimer; 
 
-    private CCSGameRules? _gameRules;
-    private bool _gameRulesInitialized;
     private CCSGameRulesProxy? _gameRulesProxy;
-
-    private void InitializeGameRules()
-    {
-        if (_gameRulesInitialized) return;
-        var gameRulesProxy = GetGameRulesProxy();
-        _gameRules = gameRulesProxy?.GameRules;
-        _gameRulesInitialized = _gameRules != null;
-    }
 
     private void OnTick()
     {
-        OnTickHUD();
+        // 1. 完全照抄作者的效能降頻寫法
+        _runThisTick = !_runThisTick;
+        if (!_runThisTick) return;
 
-        if (!_gameRulesInitialized) InitializeGameRules();
-
-        // 確保沒顯示 HUD 時，正常更新 GameRestart 狀態 (跟 ServerGraphic 一樣的防護機制)
-        if (_gameRules != null && !_isShowingHud) 
-        {
-            _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
-        }
-
+        // 2. 踢人提醒邏輯 (原本的，不受影響)
         if (_pendingInitialReminders.Count > 0)
         {
-            float currentTime = Server.CurrentTime;
+            float currentServerTime = Server.CurrentTime;
             List<ulong>? toRemove = null;
 
             foreach (var kvp in _pendingInitialReminders)
             {
-                if (currentTime >= kvp.Value)
+                if (currentServerTime >= kvp.Value)
                 {
                     ulong steamId = kvp.Key;
                     toRemove ??= new List<ulong>();
@@ -178,76 +161,80 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 }
             }
         }
-    }
 
-    // ==========================================
-    // 最直觀單純的 HUD 邏輯 (屏棄降頻重發，參考 ServerGraphic)
-    // ==========================================
-    public void StartHudCountdown(string baseHtml, float duration)
-    {
-        _cachedHudBaseHtml = baseHtml;
-        _hudEndTime = Server.CurrentTime + duration;
-        _isShowingHud = true;
-        _lastRemainingSeconds = -1; 
-    }
+        // 3. 完美照抄作者的防殘影黑魔法
+        var proxy = GetGameRulesProxy();
+        if (proxy == null || !proxy.IsValid) return;
 
-    public void OnTickHUD()
-    {
-        if (!_isShowingHud) return;
+        var gameRules = proxy.GameRules;
+        if (gameRules == null) return;
+
+        // 【致命修正】之前漏抄這行，導致暖身期被 CS2 內建 15 秒倒數綁架！
+        if (gameRules.WarmupPeriod) return; 
 
         float currentTime = Server.CurrentTime;
-        var proxy = GetGameRulesProxy();
-        var gameRules = proxy?.GameRules;
+        float restartTime = gameRules.RestartRoundTime;
+        bool expectedState = restartTime < currentTime;
 
-        // 時間到：徹底清除黑框，並恢復正常引擎狀態
-        if (currentTime >= _hudEndTime)
+        if (gameRules.GameRestart != expectedState)
         {
-            _isShowingHud = false;
-
-            foreach (var player in Utilities.GetPlayers())
-            {
-                if (IsPlayerValid(player))
-                {
-                    player.PrintToCenter(" "); 
-                }
-            }
-
-            if (gameRules != null)
-            {
-                float restartTime = gameRules.RestartRoundTime;
-                gameRules.GameRestart = restartTime < currentTime;
-                Utilities.SetStateChanged(proxy, "CCSGameRulesProxy", "m_pGameRules");
-            }
-            return;
+            gameRules.GameRestart = expectedState;
+            Utilities.SetStateChanged(proxy, "CCSGameRulesProxy", "m_pGameRules");
         }
+    }
 
-        // 動態計算剩餘秒數，只有秒數變化時才印出，不搞複雜重發
-        int remaining = (int)Math.Ceiling(_hudEndTime - currentTime);
-        if (remaining < 1) remaining = 1;
+    // ==========================================
+    // 放棄 CurrentTime，改用 1 秒 1 次的定時器倒數
+    // ==========================================
+    public void StartHudCountdown(string baseHtml, int duration)
+    {
+        _hudBaseHtml = baseHtml;
+        _hudRemainingSeconds = duration;
+        
+        _hudTimer?.Kill(); // 殺死舊計時器
+        
+        RenderHud(); // 立刻印出第一秒 (例如 10)
 
-        if (remaining != _lastRemainingSeconds)
+        // 每秒精準執行一次
+        _hudTimer = AddTimer(1.0f, () =>
         {
-            _lastRemainingSeconds = remaining;
+            _hudRemainingSeconds--;
             
-            string countdownLine = string.Format(Config.HudHtml_Countdown, remaining);
-            string currentRenderedHud = _cachedHudBaseHtml + countdownLine;
-
-            foreach (var player in Utilities.GetPlayers())
+            if (_hudRemainingSeconds <= 0)
             {
-                if (IsPlayerValid(player))
-                {
-                    player.PrintToCenterHtml(currentRenderedHud);
-                }
+                StopHud();
+            }
+            else
+            {
+                RenderHud();
+            }
+        }, TimerFlags.REPEAT);
+    }
+
+    private void RenderHud()
+    {
+        string countdownLine = string.Format(Config.HudHtml_Countdown, _hudRemainingSeconds);
+        string fullHtml = _hudBaseHtml + countdownLine;
+
+        foreach (var player in Utilities.GetPlayers())
+        {
+            if (IsPlayerValid(player))
+            {
+                player.PrintToCenterHtml(fullHtml);
             }
         }
+    }
 
-        // 核心防殘影：只要還在顯示期間，強制欺騙引擎保持 GameRestart = true
-        if (gameRules != null)
+    private void StopHud()
+    {
+        _hudTimer?.Kill();
+        _hudTimer = null;
+
+        foreach (var player in Utilities.GetPlayers())
         {
-            if (!gameRules.GameRestart)
+            if (IsPlayerValid(player))
             {
-                gameRules.GameRestart = true;
-                Utilities.SetStateChanged(proxy, "CCSGameRulesProxy", "m_pGameRules");
+                player.PrintToCenter(" "); 
             }
         }
     }
@@ -293,7 +280,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Load(bool hotReload)
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine("  LiteMatchManager v8.56 (HUD單純直觀版) 啟動！");
+        Console.WriteLine("  LiteMatchManager v8.57 (作者邏輯重構版) 啟動！");
         Console.WriteLine("=================================================");
 
         _isServerShuttingDown = false;
@@ -419,9 +406,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         RegisterListener<Listeners.OnMapStart>(mapName => 
         {
             _isServerShuttingDown = false;
-            _gameRules = null;
-            _gameRulesInitialized = false;
-            _gameRulesProxy = null; // 切換地圖時清空快取
+            _gameRulesProxy = null; 
 
             ResetMatchState();
             Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
@@ -429,11 +414,6 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
                 Server.ExecuteCommand($"exec {Config.WarmupConfigName}");
             });
         });
-
-        if (hotReload)
-        {
-            InitializeGameRules();
-        }
     }
 
     private int GetDynamicRequiredPlayers()
@@ -1037,8 +1017,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
         _liveTimer?.Kill();
         _liveTimer = null;
         
-        // 清除 HUD 狀態
-        _isShowingHud = false;
+        StopHud(); // 清除 HUD
         
         _privateCheckTimer?.Kill();
         _privateCheckTimer = AddTimer(Config.UnreadyReminderInterval, CheckAndWarnUnreadyPlayers, TimerFlags.REPEAT);
@@ -1077,6 +1056,7 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     public override void Unload(bool hotReload)
     {
         _isServerShuttingDown = true;
+        StopHud();
         base.Unload(hotReload);
     }
 }

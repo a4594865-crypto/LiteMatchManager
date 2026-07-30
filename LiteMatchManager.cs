@@ -103,11 +103,6 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
     // ==========================================
     // HUD 控制變數
     // ==========================================
-    public bool _isShowingHud = false;
-    private float _hudEndTime = 0f;
-    private string _cachedHudBaseHtml = "";
-    private int _lastRemainingSeconds = -1;
-    private CCSGameRulesProxy? _gameRulesProxy;
 
     private CounterStrikeSharp.API.Modules.Timers.Timer? _privateCheckTimer;
     private CounterStrikeSharp.API.Modules.Timers.Timer? _publicBroadcastTimer;

@@ -125,7 +125,7 @@ public partial class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfi
 
         if (!_gameRulesInitialized) InitializeGameRules();
 
-        if (_gameRules != null && !_isShowingHud) // 只有在沒顯示 HUD 時，才走原本的邏輯
+        if (_gameRules != null)
         {
             _gameRules.GameRestart = _gameRules.RestartRoundTime < Server.CurrentTime;
         }

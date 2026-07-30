@@ -14,6 +14,7 @@ public partial class LiteMatchManager
     private string _cachedHudBaseHtml = ""; 
     private string _currentRenderedHud = ""; 
     private int _lastRemainingSeconds = -1;
+    private bool _runThisTickHud = false; // 你的高效能降頻開關
     
     // 專門給 HUD 用的 GameRules 快取
     private CCSGameRulesProxy? _gameRulesProxyHud; 
@@ -30,8 +31,9 @@ public partial class LiteMatchManager
     // 專門處理 HUD 的 Tick 邏輯 (會被主檔案的 OnTick 呼叫)
     private void HandleHudTick()
     {
-        // 1. 處理 HUD 顯示 (移除降頻，每一 Tick 皆執行)
-        if (_isShowingHud)
+        _runThisTickHud = !_runThisTickHud; // 降低一半的 Tick 處理頻率，保持高效能
+        
+        if (_runThisTickHud && _isShowingHud)
         {
             float currentTime = Server.CurrentTime;
             if (currentTime >= _hudEndTime)
@@ -67,7 +69,7 @@ public partial class LiteMatchManager
             }
         }
 
-        // 2. 黑魔法：處理殘影與引擎狀態 (完美移植版)
+        // 2. 黑魔法：處理殘影與引擎狀態 (帶有暖身防護罩)
         var proxy = GetGameRulesProxyForHud();
         if (proxy == null || !proxy.IsValid) return;
 

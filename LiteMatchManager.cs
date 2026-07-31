@@ -9,7 +9,7 @@ using CounterStrikeSharp.API.Modules.Cvars;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using System;
-using System.Linq;
+// 【修改處】已徹底移除 using System.Linq; 實現 0 垃圾編譯
 
 namespace LiteMatchManager;
 
@@ -101,11 +101,21 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private CCSGameRules? _gameRules;
     private bool _gameRulesInitialized;
 
+    // 【修改處】新增計分板快取變數
+    private CCSTeam? _cachedTeamT = null;
+    private CCSTeam? _cachedTeamCT = null;
+
     private void InitializeGameRules()
     {
         if (_gameRulesInitialized) return;
-        var gameRulesProxy = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault();
-        _gameRules = gameRulesProxy?.GameRules;
+        
+        // 【修改處】拔除 LINQ 的 .FirstOrDefault()，改用迴圈找一次就停
+        foreach (var proxy in Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules"))
+        {
+            _gameRules = proxy.GameRules;
+            break;
+        }
+        
         _gameRulesInitialized = _gameRules != null;
     }
 
@@ -312,6 +322,10 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             _isServerShuttingDown = false;
             _gameRules = null;
             _gameRulesInitialized = false;
+            
+            // 【修改處】手動管理記憶體生命週期，確保不會抓到上一張地圖的垃圾
+            _cachedTeamT = null;
+            _cachedTeamCT = null;
 
             ResetMatchState();
             Console.WriteLine($"[LiteMatch] [StartWarmup] 地圖載入完成！準備執行暖身設定檔：{Config.WarmupConfigName}");
@@ -356,16 +370,19 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
             if (!_isMatchLive || _isChangingMap) return; 
             try 
             {
-                var teams = Utilities.FindAllEntitiesByDesignerName<CCSTeam>("cs_team_manager");
-                if (teams != null)
+                // 【修改處】實體快取機制，大幅降低伺服器 CPU 負擔與取消 LINQ
+                if (_cachedTeamT == null || !_cachedTeamT.IsValid || _cachedTeamCT == null || !_cachedTeamCT.IsValid)
                 {
-                    var tTeam = teams.FirstOrDefault(t => t.TeamNum == 2);
-                    var ctTeam = teams.FirstOrDefault(t => t.TeamNum == 3);
-
-                    if (tTeam != null && ctTeam != null)
+                    foreach (var team in Utilities.FindAllEntitiesByDesignerName<CCSTeam>("cs_team_manager"))
                     {
-                        if (ctTeam.Score >= 20 || tTeam.Score >= 20) return; 
+                        if (team.TeamNum == 2) _cachedTeamT = team;
+                        if (team.TeamNum == 3) _cachedTeamCT = team;
                     }
+                }
+
+                if (_cachedTeamT != null && _cachedTeamCT != null)
+                {
+                    if (_cachedTeamCT.Score >= 20 || _cachedTeamT.Score >= 20) return; 
                 }
 
                 int activeT = 0, activeCT = 0;
@@ -491,10 +508,12 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
 
             string formattedMessage = $"{senderPrefix} {nameColor}{playerName}{ChatColors.White}：{message}";
 
-            var allPlayers = Utilities.GetPlayers().Where(p => p != null && p.IsValid && !p.IsBot);
-            foreach (var p in allPlayers)
+            foreach (var p in Utilities.GetPlayers())
             {
-                p.PrintToChat(formattedMessage);
+                if (p != null && p.IsValid && !p.IsBot)
+                {
+                    p.PrintToChat(formattedMessage);
+                }
             }
 
             return HookResult.Handled; 
@@ -944,13 +963,21 @@ public class LiteMatchManager : BasePlugin, IPluginConfig<LiteMatchConfig>
     private HookResult OnMatchEnd(EventCsWinPanelMatch @event, GameEventInfo info)
     {
         if (!_isMatchLive) return HookResult.Continue;
+        
         int scoreT = 0, scoreCT = 0;
-        var teamManagers = Utilities.FindAllEntitiesByDesignerName<CCSTeam>("cs_team_manager");
-        foreach (var team in teamManagers)
+
+        // 【修改處】實體快取機制，應用於回合結束檢查分數，拔除 LINQ
+        if (_cachedTeamT == null || !_cachedTeamT.IsValid || _cachedTeamCT == null || !_cachedTeamCT.IsValid)
         {
-            if (team.TeamNum == 2) scoreT = team.Score;
-            if (team.TeamNum == 3) scoreCT = team.Score;
+            foreach (var team in Utilities.FindAllEntitiesByDesignerName<CCSTeam>("cs_team_manager"))
+            {
+                if (team.TeamNum == 2) _cachedTeamT = team;
+                if (team.TeamNum == 3) _cachedTeamCT = team;
+            }
         }
+
+        if (_cachedTeamT != null) scoreT = _cachedTeamT.Score;
+        if (_cachedTeamCT != null) scoreCT = _cachedTeamCT.Score;
 
         string winnerName = scoreT > scoreCT ? "恐怖份子 (T)" : "反恐小組 (CT)";
         string loserName = scoreT > scoreCT ? "反恐小組 (CT)" : "恐怖份子 (T)";
